@@ -25,6 +25,9 @@ use syntect::parsing::SyntaxSet;
 
 use crate::model::Span;
 
+/// Beyond this many lines, a file is shown without syntax colour.
+const MAX_LINES: usize = 20_000;
+
 /// A line's colours, as byte ranges into that line.
 pub type Colours = Vec<(Span, Color)>;
 
@@ -98,6 +101,14 @@ fn theme() -> &'static SyntectTheme {
 /// colours for every line.
 pub fn colour_file(name: &str, lines: &[String]) -> Vec<Colours> {
     let empty = || vec![Colours::new(); lines.len()];
+
+    // Measured at roughly 60–80ms for a few hundred lines in release, and the
+    // parser cannot skip ahead — line 400's colours depend on line 12. Past a
+    // point the wait costs more than the colour is worth, and a diff without
+    // syntax colour is still a diff.
+    if lines.len() > MAX_LINES {
+        return empty();
+    }
 
     let Some(extension) = extension(name) else {
         return empty();
@@ -190,6 +201,16 @@ mod tests {
         let source = lines("some text\nmore text");
         let coloured = colour_file("notes.unheardof", &source);
         assert_eq!(coloured.len(), 2);
+        assert!(coloured.iter().all(Vec::is_empty));
+    }
+
+    #[test]
+    fn a_very_large_file_is_shown_without_colour_rather_than_slowly() {
+        let source: Vec<String> = (0..MAX_LINES + 1)
+            .map(|n| format!("let x{n} = {n};"))
+            .collect();
+        let coloured = colour_file("big.rs", &source);
+        assert_eq!(coloured.len(), source.len());
         assert!(coloured.iter().all(Vec::is_empty));
     }
 

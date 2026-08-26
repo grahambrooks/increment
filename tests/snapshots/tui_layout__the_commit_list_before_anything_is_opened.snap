@@ -1,0 +1,16 @@
+---
+source: tests/tui_layout.rs
+expression: "draw_review(&mut review(), 90, 12)"
+---
+┌ 5 commits ─────────────────────────────────────────────────────────────────────────────┐
+│3f2a1c9  2026-08-26  Phase 5: move detection and whitespace modes                       │
+│10f4df2  2026-08-26  Phase 4: the interactive browser                                   │
+│5ab2f81  2026-08-26  Phase 3: git integration                                           │
+│47763dd  2026-08-26  Phases 1 and 2: the aligned split view                             │
+│039c984  2026-08-26  Phase 0: scaffold                                                  │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+1/5  ↵ open  j/k move  Tab focus  q quit

@@ -39,6 +39,116 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+/// One commit, as the review list shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Commit {
+    /// Abbreviated, for display.
+    pub short_id: String,
+    /// Full, for asking for its diff later.
+    pub id: String,
+    pub summary: String,
+    pub author: String,
+    /// `YYYY-MM-DD`, which sorts and aligns.
+    pub date: String,
+}
+
+/// Walk the history named by a `git log`-style spec.
+///
+/// `a..b` walks `b` and stops at `a`; a bare revision walks from there; nothing
+/// walks from `HEAD`. Newest first, as `git log` does — a review starts at the
+/// top of the branch.
+pub fn log(spec: Option<&str>, limit: Option<usize>) -> Result<Vec<Commit>, Error> {
+    let repo = gix::discover(".").map_err(|error| Error::NotARepository(error.to_string()))?;
+
+    let (tip, hidden) = match spec.and_then(split_range) {
+        Some((from, to)) => (to.to_owned(), Some(from.to_owned())),
+        None => (spec.unwrap_or("HEAD").to_owned(), None),
+    };
+
+    let tip_id = repo
+        .rev_parse_single(tip.as_str())
+        .map_err(|error| Error::Revision {
+            spec: tip.clone(),
+            reason: error.to_string(),
+        })?
+        .detach();
+
+    let mut walk = repo.rev_walk([tip_id]);
+    if let Some(hidden) = &hidden {
+        // The exclusive end of the range: `a..b` is everything reachable from
+        // `b` that is not reachable from `a`.
+        let hidden_id = repo
+            .rev_parse_single(hidden.as_str())
+            .map_err(|error| Error::Revision {
+                spec: hidden.clone(),
+                reason: error.to_string(),
+            })?
+            .detach();
+        walk = walk.with_hidden([hidden_id]);
+    }
+
+    let walk = walk.all().map_err(|error| Error::Read(error.to_string()))?;
+
+    let mut commits = Vec::new();
+    for info in walk {
+        if limit.is_some_and(|limit| commits.len() >= limit) {
+            break;
+        }
+        let info = info.map_err(|error| Error::Read(error.to_string()))?;
+        let object = info
+            .object()
+            .map_err(|error| Error::Read(error.to_string()))?;
+
+        // A commit whose fields will not decode is still a commit. Showing it
+        // with what could be read beats dropping it from the history.
+        let summary = object
+            .message()
+            .map(|message| message.summary().to_string())
+            .unwrap_or_else(|_| "<unreadable message>".to_owned());
+        let author = object
+            .author()
+            .map(|author| author.name.to_string())
+            .unwrap_or_default();
+        // Just the date: a review list is scanned down the left edge, and a
+        // full timestamp costs eleven columns to say what the summary already
+        // implies.
+        // The date only. gix's ISO8601 is `2026-08-26 16:52:45 -0600`, and the
+        // time costs fourteen columns of a list that is scanned down its left
+        // edge — columns the summary needs more.
+        let date = object
+            .time()
+            .ok()
+            .and_then(|time| time.format(gix::date::time::format::ISO8601).ok())
+            .map(|text| text.split_whitespace().next().unwrap_or(&text).to_owned())
+            .unwrap_or_default();
+
+        commits.push(Commit {
+            short_id: object
+                .short_id()
+                .map(|id| id.to_string())
+                .unwrap_or_else(|_| info.id.to_string()),
+            id: info.id.to_string(),
+            summary,
+            author,
+            date,
+        });
+    }
+
+    Ok(commits)
+}
+
+/// The diff a single commit introduced: its first parent against itself.
+pub fn commit(id: &str, paths: &[PathBuf]) -> Result<Changes, Error> {
+    compare(Some(&format!("{id}~1..{id}")), paths).or_else(|error| {
+        // A root commit has no parent, so `id~1` does not resolve. Everything
+        // in it is an addition.
+        match error {
+            Error::Revision { .. } => compare(Some(&format!("..{id}")), paths),
+            other => Err(other),
+        }
+    })
+}
+
 /// Compare, according to a `git diff`-style revision spec.
 ///
 /// `paths`, if given, restricts the result to entries at or below one of them.

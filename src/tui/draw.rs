@@ -15,7 +15,8 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use crate::model::RowKind;
 use crate::theme::marker;
 
-use super::keys::HINTS;
+use super::keys::{HINTS, NESTED_HINTS, REVIEW_HINTS};
+use super::review::{Mode, Pane, Review};
 use super::state::{App, Focus, Search};
 
 /// Columns given to the file list. Hidden entirely for a single file, where it
@@ -31,8 +32,15 @@ const FILE_LIST_WIDTH: u16 = 32;
 const MAP_WIDTH: u16 = 1;
 
 pub fn draw(frame: &mut Frame<'_>, app: &mut App) {
-    let [body, status] =
-        Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(frame.area());
+    diff_view(frame, app, frame.area());
+}
+
+/// Draw the diff browser into a given area.
+///
+/// Taking an area rather than the whole frame is what lets the review flow put
+/// a commit list above it without the two drawing over each other.
+pub fn diff_view(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
+    let [body, status] = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(area);
 
     let show_files = app.entries().len() > 1;
     let [files, diff, map] = Layout::horizontal([
@@ -206,12 +214,12 @@ fn draw_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
         (Search::Active { query, matches, at }, None) => Line::from(vec![
             Span::styled(format!("/{query}"), Style::new().fg(Color::Yellow)),
             Span::raw(format!("  match {}/{}  ", at + 1, matches.len())),
-            Span::styled(hints(), Style::new().fg(Color::DarkGray)),
+            Span::styled(hints(app), Style::new().fg(Color::DarkGray)),
         ]),
         (Search::Off, None) => Line::from(vec![
             Span::raw(position(app)),
             Span::raw("  "),
-            Span::styled(hints(), Style::new().fg(Color::DarkGray)),
+            Span::styled(hints(app), Style::new().fg(Color::DarkGray)),
         ]),
     };
 
@@ -242,8 +250,8 @@ fn position(app: &App) -> String {
     )
 }
 
-fn hints() -> String {
-    HINTS
+fn hints(app: &App) -> String {
+    if app.is_nested() { NESTED_HINTS } else { HINTS }
         .iter()
         .map(|(keys, what)| format!("{keys} {what}"))
         .collect::<Vec<_>>()
@@ -328,4 +336,123 @@ fn colour_of(colour: anstyle::Color) -> Color {
             A::BrightWhite => Color::White,
         },
     }
+}
+
+/// Draw the review: a commit list, and the selected commit's diff below it.
+pub fn review(frame: &mut Frame<'_>, review: &mut Review<'_>) {
+    let area = frame.area();
+
+    match review.mode() {
+        Mode::List => {
+            let [list, status] =
+                Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(area);
+            review.set_log_viewport(list.height.saturating_sub(2).max(1) as usize);
+            draw_commits(frame, review, list);
+            draw_review_status(frame, review, status);
+        }
+        Mode::Split => {
+            // Enough of the log to keep your place in it, and the rest to the
+            // diff — which is the thing being read.
+            let log_height = (area.height * 35 / 100).clamp(4, 14);
+            let [list, diff] =
+                Layout::vertical([Constraint::Length(log_height), Constraint::Min(4)]).areas(area);
+
+            review.set_log_viewport(list.height.saturating_sub(2).max(1) as usize);
+            draw_commits(frame, review, list);
+
+            // The diff draws its own status line, so the review does not add a
+            // second one competing for the same row.
+            if let Some(app) = review.diff_mut() {
+                diff_view(frame, app, diff);
+            } else {
+                frame.render_widget(
+                    Paragraph::new("no diff loaded").block(bordered(" diff ", false)),
+                    diff,
+                );
+            }
+        }
+    }
+}
+
+fn draw_commits(frame: &mut Frame<'_>, review: &Review<'_>, area: Rect) {
+    let focused = review.focus() == Pane::Log;
+    let title = format!(" {} commits ", review.commits().len());
+    let block = bordered(&title, focused);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if review.commits().is_empty() {
+        frame.render_widget(Paragraph::new("no commits"), inner);
+        return;
+    }
+
+    // The summary gets whatever the fixed columns do not need. It is the part
+    // that is actually read; the id and date are there to be scanned past.
+    let fixed = 7 + 2 + 10 + 2;
+    let summary_width = (inner.width as usize).saturating_sub(fixed + 2);
+
+    let rows: Vec<Line<'_>> = review
+        .visible()
+        .map(|index| {
+            let commit = &review.commits()[index];
+            let selected = index == review.selected();
+            let spans = vec![
+                Span::styled(
+                    commit.short_id.chars().take(7).collect::<String>(),
+                    Style::new().fg(Color::Yellow),
+                ),
+                Span::raw("  "),
+                Span::styled(commit.date.clone(), Style::new().fg(Color::DarkGray)),
+                Span::raw("  "),
+                Span::raw(clip(&commit.summary, summary_width)),
+            ];
+            let line = Line::from(spans);
+            if selected {
+                line.style(Style::new().add_modifier(Modifier::REVERSED))
+            } else {
+                line
+            }
+        })
+        .collect();
+
+    frame.render_widget(Paragraph::new(rows), inner);
+}
+
+fn draw_review_status(frame: &mut Frame<'_>, review: &Review<'_>, area: Rect) {
+    let line = match review.notice() {
+        Some(notice) => Line::from(Span::styled(
+            notice.to_owned(),
+            Style::new().fg(Color::Yellow),
+        )),
+        None => {
+            let position = if review.commits().is_empty() {
+                "no commits".to_owned()
+            } else {
+                format!("{}/{}", review.selected() + 1, review.commits().len())
+            };
+            let hints = REVIEW_HINTS
+                .iter()
+                .map(|(keys, what)| format!("{keys} {what}"))
+                .collect::<Vec<_>>()
+                .join("  ");
+            Line::from(vec![
+                Span::raw(position),
+                Span::raw("  "),
+                Span::styled(hints, Style::new().fg(Color::DarkGray)),
+            ])
+        }
+    };
+    frame.render_widget(Paragraph::new(line), area);
+}
+
+/// Trim from the right: a commit summary front-loads its meaning.
+fn clip(text: &str, width: usize) -> String {
+    if text.chars().count() <= width {
+        return text.to_owned();
+    }
+    if width <= 1 {
+        return String::new();
+    }
+    let kept: String = text.chars().take(width - 1).collect();
+    format!("{kept}…")
 }

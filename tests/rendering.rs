@@ -127,11 +127,7 @@ fn the_browser_and_the_pager_lay_out_identically() {
     let composed = split::compose(&document, &Highlighting::none(), &options);
 
     let mut app = App::new(
-        vec![Entry {
-            document: document.clone(),
-            unfolded: None,
-            highlighting: Highlighting::none(),
-        }],
+        vec![Entry::new(document.clone(), None, Highlighting::none())],
         options,
     );
     app.set_viewport(120, composed.len().max(1));

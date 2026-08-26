@@ -10,6 +10,7 @@
 
 pub mod draw;
 pub mod keys;
+pub mod review;
 pub mod state;
 
 use std::io::IsTerminal;
@@ -17,7 +18,9 @@ use std::io::IsTerminal;
 use ratatui::crossterm::event::{self, Event};
 
 use crate::render::Options;
+use crate::source::git::Commit;
 
+pub use review::{Loader, Review};
 pub use state::{Action, App, Entry};
 
 /// Run the browser until the reader quits.
@@ -36,6 +39,42 @@ pub fn run(entries: Vec<Entry>, options: Options) -> std::io::Result<()> {
     let result = event_loop(&mut terminal, &mut app);
     ratatui::restore();
     result
+}
+
+/// Run the review flow — a commit list, with each commit's diff below it.
+pub fn review(commits: Vec<Commit>, loader: Loader<'_>, options: Options) -> std::io::Result<()> {
+    if !std::io::stdout().is_terminal() {
+        return Err(std::io::Error::other(
+            "the interactive browser needs a terminal",
+        ));
+    }
+
+    let mut review = Review::new(commits, loader, options);
+    let mut terminal = ratatui::init();
+    let result = review_loop(&mut terminal, &mut review);
+    ratatui::restore();
+    result
+}
+
+fn review_loop(
+    terminal: &mut ratatui::DefaultTerminal,
+    review: &mut Review<'_>,
+) -> std::io::Result<()> {
+    while !review.should_quit() {
+        terminal.draw(|frame| draw::review(frame, review))?;
+
+        if let Event::Key(key) = event::read()?
+            && key.kind == event::KeyEventKind::Press
+        {
+            let search = review
+                .diff()
+                .map_or(state::Search::Off, |diff| diff.search().clone());
+            if let Some(event) = keys::review_action(key, review.focus(), &search) {
+                review.apply(event);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> std::io::Result<()> {

@@ -1,6 +1,6 @@
 # 003 — A tig-shaped review flow
 
-Status: proposal, awaiting a decision · Date: 2026-08-26 · Follows: `002-architecture-and-plan.md`
+Status: **6a and 6b built (2026-08-26)**; 6c and 6d outstanding · Follows: `002-architecture-and-plan.md`
 
 Phases 0–5 built a diff *visualiser*: point it at two files or a revision and it draws them well.
 What it cannot do is the thing you actually sit down to do — **work through a branch, commit by
@@ -69,16 +69,43 @@ Realistically this is phase 4 again in size.
 
 ## 4. Proposed phasing
 
-### 6a — the log view (the whole idea, smallest version)
-`gdiff review [<revrange>]` opens a commit list. `Enter` opens that commit's diff in the browser
-that already exists; `q` returns to the list. No split, no tracking — one view at a time.
+### 6a — the log view — **done**
+`gdiff review [<revrange>] [paths…] [--limit N]` opens a commit list. `Enter` opens that
+commit's diff in the browser that already exists; `q` returns to the list, and only quits from
+the list itself.
 
 **Done when:** `gdiff review HEAD~20..HEAD` lists twenty commits, `Enter` shows one, `q` comes
-back, and the navigation is unit-tested with no terminal, as in phase 4.
+back, and the navigation is unit-tested with no terminal, as in phase 4. *Met.*
 
-### 6b — the split, with cursor tracking
+### 6b — the split, with cursor tracking — **done**
 Log above, diff below. Moving the selection updates the diff. `Tab` moves focus between them.
-This is what makes it feel like tig rather than like a menu.
+
+Two things the work settled:
+
+- **The review knows nothing about git.** Commits arrive as data and their diffs through a
+  `Loader` callback, so the whole flow is tested against fabricated commits with a fake loader —
+  no repository, no terminal. The loader is also what makes 6c possible without touching this
+  module.
+- **Three status lines, three meanings for `q`.** Quit from a standalone browser, quit from the
+  commit list (the last view open), back from a diff opened inside the review. Each line has to
+  say its own, and a test asserts all three — a hint naming a key that does something else is
+  worse than no hint.
+
+#### The bug this found
+
+Highlighting was **eager and per-file**, so opening a commit that changed twenty files parsed all
+twenty to show one. Measured in release: 60–80ms per file, so about a second of dead terminal per
+commit — and with 6b's cursor tracking, per press of the down arrow. In a debug build it looked
+like a hang, which is how it was found.
+
+`highlight`'s own module documentation said to highlight lazily and cache. The rule was written
+and then broken. Entries now compute their highlighting the first time they are drawn, and
+`colour_file` refuses outright above 20,000 lines — the parser cannot skip ahead, because line
+400's colours depend on line 12, so the only lever is not starting.
+
+This is also the first place the `regex-fancy` trade-off shows up in a number: the pure-Rust
+engine is materially slower than the `onig` it was chosen over. Still the right call — a C
+toolchain in every build costs more than 60ms a file — but worth knowing it is not free.
 
 ### 6c — scale
 Incremental log loading with a progress indication; diffing the selected commit off the draw
@@ -88,11 +115,18 @@ path; `--limit`.
 An "uncommitted changes" entry at the top of the log, opening `gdiff git`. Small, and it is what
 makes the tool usable mid-work rather than only after committing.
 
-## 5. The decision this needs
+## 5. The decision, taken
 
-6a changes what gdiff *is* — from "render this diff" to "review this branch". That is a
-positioning change, not just a feature, and `CLAUDE.md`'s "Positioning" section would need
-rewriting to match. Worth doing if reviewing a branch is the job gdiff is for; not worth doing if
-the job is being the thing `git difftool` and `core.pager` call.
+6a changed what gdiff *is* — from "render this diff" to "review this branch". That was a
+positioning change rather than a feature, and it was taken deliberately on 2026-08-26;
+`CLAUDE.md`'s positioning section now says so. gdiff is still not a git browser: the line in §2
+is what keeps it from becoming one, and it holds.
 
-Both are defensible. The question is which one gdiff is.
+## 6. Still outstanding
+
+- **6c — scale.** The log loads in full before the first frame, and the selected commit is diffed
+  on the draw path. Neither is a problem at a few hundred commits; both will be at fifty
+  thousand. Incremental loading with a progress indication, and diffing off the draw path.
+- **6d — the working tree as a row.** An "uncommitted changes" entry at the top of the log,
+  opening `gdiff git`. Small, and it is what makes the tool usable mid-work rather than only
+  after committing.

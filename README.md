@@ -32,6 +32,28 @@ gdiff --format json old.rs new.rs
 Exit codes follow `diff(1)`, so `gdiff git` in a script says whether anything
 changed.
 
+## Reviewing a branch
+
+```sh
+gdiff review                     # the current branch
+gdiff review main..feature       # a range
+gdiff review --limit 500 HEAD    # …further back
+```
+
+A commit list; `Enter` opens what that commit did in the split view below it, and moving the
+selection with the split open follows it. `q` closes a view and returns to the list; only the
+list itself quits. `Q` quits from anywhere.
+
+| Key | |
+|---|---|
+| `↵` | open the selected commit |
+| `j` `k` | move |
+| `Tab` | move between the commit list and the diff |
+| `q` | back — or quit, from the list |
+| `Q` | quit |
+
+Inside the diff, every key from the browser below still works.
+
 ## The browser
 
 ```sh

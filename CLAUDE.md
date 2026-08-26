@@ -25,6 +25,11 @@ Not another styled pager — `delta` owns that. Not a structural differ — `dif
 gdiff is the **aligned split view in the terminal**: correspondence between the two sides made
 visible, with folding and a whole-file change map.
 
+Since 2026-08-26 it also **reviews a branch**: `gdiff review` lists commits and shows what each
+one did, in the same split view. That is a deliberate widening from "render this diff" — see
+`design/003-review-flow.md`. It is still not a git browser, and the line in §2 of that document
+is what keeps it from becoming one.
+
 ## Standing constraints
 
 - **Single binary crate**, directory modules under `src/`. No Cargo workspace.
@@ -44,8 +49,15 @@ visible, with folding and a whole-file change map.
 ## Deliberately out of scope
 
 Recorded so a later session does not "complete" something that was cut on purpose: three-way
-merge and conflict resolution, editing (gdiff is a viewer), a GUI, a directory-tree review UI in
-v1, an in-process plugin API, and automatic crates.io publishing.
+merge and conflict resolution, editing (gdiff is a viewer), a GUI, an in-process plugin API, and
+automatic crates.io publishing.
+
+**Structural diff is ceded to difftastic**, decided 2026-08-26. tree-sitter's core and every
+grammar are C compiled through `cc`, so it cannot be added without breaking the pure-Rust
+constraint above. Do not reintroduce `--structural`. See `design/002` §"Structural diff".
+
+Staging, tree/blob browsing, blame and refs views are **not** part of the review flow either —
+that line is what keeps gdiff a diff viewer rather than a second git browser. See `design/003`.
 
 ## Workflow
 

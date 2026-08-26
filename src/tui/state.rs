@@ -9,6 +9,8 @@
 //! finds a match nobody can see — and none of them need a screen to reproduce.
 //! Every one of them is a unit test in this file.
 
+use std::cell::OnceCell;
+
 use crate::highlight::Highlighting;
 use crate::model::{DiffDocument, RowKind};
 use crate::render::Options;
@@ -23,10 +25,54 @@ pub struct Entry {
     /// `None` for a patch: it never carried the hidden lines, so there is
     /// nothing to unfold and saying so is better than a key that does nothing.
     pub unfolded: Option<DiffDocument>,
-    pub highlighting: Highlighting,
+    /// Computed the first time this file is actually drawn.
+    ///
+    /// Highlighting costs tens of milliseconds per file, and a commit changing
+    /// twenty files shows one of them at a time. Doing all twenty up front
+    /// meant a second of dead terminal on every commit opened — and with the
+    /// review's cursor tracking, on every press of the down arrow.
+    highlighting: OnceCell<Highlighting>,
+    source: Option<Box<dyn Fn() -> Highlighting>>,
 }
 
 impl Entry {
+    /// An entry whose highlighting is already known — or is `none`.
+    pub fn new(
+        document: DiffDocument,
+        unfolded: Option<DiffDocument>,
+        highlighting: Highlighting,
+    ) -> Self {
+        let cell = OnceCell::new();
+        let _ = cell.set(highlighting);
+        Self {
+            document,
+            unfolded,
+            highlighting: cell,
+            source: None,
+        }
+    }
+
+    /// An entry that highlights itself when it is first drawn.
+    pub fn lazy(
+        document: DiffDocument,
+        unfolded: Option<DiffDocument>,
+        source: impl Fn() -> Highlighting + 'static,
+    ) -> Self {
+        Self {
+            document,
+            unfolded,
+            highlighting: OnceCell::new(),
+            source: Some(Box::new(source)),
+        }
+    }
+
+    pub fn highlighting(&self) -> &Highlighting {
+        self.highlighting.get_or_init(|| match &self.source {
+            Some(source) => source(),
+            None => Highlighting::none(),
+        })
+    }
+
     pub fn name(&self) -> &str {
         &self.document.new.name
     }
@@ -101,6 +147,11 @@ pub struct App {
     layout: Vec<VisualRow>,
     /// A one-shot note for the status line.
     notice: Option<String>,
+    /// Whether this view sits inside the review flow, where `q` goes back to
+    /// the commit list rather than quitting. The status line has to say the
+    /// right thing: a hint that names a key which does something else is worse
+    /// than no hint.
+    nested: bool,
 }
 
 impl App {
@@ -118,6 +169,7 @@ impl App {
             quit: false,
             layout: Vec::new(),
             notice: None,
+            nested: false,
         };
         app.relayout();
         app
@@ -125,6 +177,15 @@ impl App {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// Mark this view as living inside the review flow.
+    pub fn nest(&mut self) {
+        self.nested = true;
+    }
+
+    pub fn is_nested(&self) -> bool {
+        self.nested
     }
 
     pub fn should_quit(&self) -> bool {
@@ -330,7 +391,7 @@ impl App {
 
     fn relayout(&mut self) {
         self.layout = match (self.document(), self.entry()) {
-            (Some(document), Some(entry)) => compose(document, &entry.highlighting, &self.options),
+            (Some(document), Some(entry)) => compose(document, entry.highlighting(), &self.options),
             _ => Vec::new(),
         };
         // Any recorded match positions refer to the old layout.
@@ -470,8 +531,8 @@ mod tests {
     fn entry(old: &str, new: &str, context: Option<usize>) -> Entry {
         let old = SourceFile::from_text("a/f.rs", old);
         let new = SourceFile::from_text("b/f.rs", new);
-        Entry {
-            document: compare(
+        Entry::new(
+            compare(
                 &old,
                 &new,
                 &DiffOptions {
@@ -479,7 +540,7 @@ mod tests {
                     ..DiffOptions::default()
                 },
             ),
-            unfolded: Some(compare(
+            Some(compare(
                 &old,
                 &new,
                 &DiffOptions {
@@ -487,8 +548,8 @@ mod tests {
                     ..DiffOptions::default()
                 },
             )),
-            highlighting: Highlighting::none(),
-        }
+            Highlighting::none(),
+        )
     }
 
     fn options() -> Options {

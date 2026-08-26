@@ -112,9 +112,10 @@ imara's token model gets awkward for word diff.
 | B. Structural first (tree-sitter) | Superior semantics, but no grammar → no diff, poor fit for column alignment, heavy C dependencies against the pure-Rust rule. |
 | C. Textual core, structural as an opt-in mode later | Keeps the layout engine line-oriented; structural results are *projected back onto lines* for display. |
 
-**Recommend C**, with A shipping first. Structural is a phase-5 `--structural` flag, gated on
-whether it can be made to respect the two-column layout. Record it as deliberately deferred, not
-forgotten.
+**Recommended C, with A shipping first. Settled at A (2026-08-26).** Phase 5 found the deciding
+fact: tree-sitter's core and every one of its grammars are C, compiled through `cc`, so option C
+cannot be built without breaking the project's pure-Rust constraint. Structural diff is ceded to
+difftastic — see `002` §"Structural diff: declined". `--structural` is not a planned flag.
 
 ### O3 — Syntax highlighting
 

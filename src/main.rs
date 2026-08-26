@@ -30,6 +30,14 @@ fn main() -> ExitCode {
 }
 
 fn run(args: &Args) -> Result<i32, String> {
+    // The review flow is interactive by definition — there is no non-terminal
+    // rendering of "work through a branch". It is handled before everything
+    // else because it does not read a source up front; it loads each commit as
+    // the reader reaches it.
+    if let Source::Review { rev, paths, limit } = args.source()? {
+        return review(args, rev, paths, limit);
+    }
+
     // Resolved before anything is read, so `--ui tui > file` fails immediately
     // rather than after the work.
     let surface = surface::resolve(args.ui.into(), std::io::stdout().is_terminal())
@@ -74,12 +82,72 @@ fn read(args: &Args, diff_options: &diff::Options) -> Result<Changes, String> {
         Source::Git { rev, paths } => {
             source::git::compare(rev, paths).map_err(|error| error.to_string())
         }
+        // Handled before any source is read — see `run`.
+        Source::Review { .. } => unreachable!("the review flow does not read a source up front"),
         Source::Patch => {
             let stdin = std::io::stdin();
             source::patch::parse(stdin.lock(), diff_options)
                 .map_err(|error| format!("reading the patch: {error}"))
         }
     }
+}
+
+/// Work through a branch, commit by commit.
+fn review(
+    args: &Args,
+    rev: Option<&str>,
+    paths: &[std::path::PathBuf],
+    limit: usize,
+) -> Result<i32, String> {
+    if !std::io::stdout().is_terminal() {
+        return Err(surface::NotATerminal.to_string());
+    }
+
+    let commits = source::git::log(rev, Some(limit)).map_err(|error| error.to_string())?;
+    if commits.is_empty() {
+        return Ok(exit::SUCCESS);
+    }
+
+    let options = args.render_options(terminal_width());
+    let diff_options = args.diff_options();
+    let syntax = args.syntax_enabled(&options.theme);
+
+    // Each commit is diffed when the reader reaches it, not up front: a branch
+    // of two hundred commits would otherwise mean two hundred diffs before the
+    // first frame.
+    let loader: tui::Loader<'_> = Box::new(move |commit| {
+        let changes = source::git::commit(&commit.id, paths).map_err(|error| error.to_string())?;
+        Ok(changes
+            .comparisons
+            .iter()
+            .map(|pair| {
+                let document = diff::compare(&pair.old, &pair.new, &diff_options);
+                let unfolded = diff::compare(
+                    &pair.old,
+                    &pair.new,
+                    &diff::Options {
+                        context: None,
+                        ..diff_options
+                    },
+                );
+                // Highlighting is deferred to the moment this file is drawn.
+                // A commit changing twenty files shows one at a time, and
+                // parsing the other nineteen costs about a second of dead
+                // terminal for nothing.
+                let (old, new) = (pair.old.clone(), pair.new.clone());
+                tui::Entry::lazy(document, Some(unfolded), move || {
+                    if syntax {
+                        Highlighting::of(&old, &new)
+                    } else {
+                        Highlighting::none()
+                    }
+                })
+            })
+            .collect())
+    });
+
+    tui::review(commits, loader, options).map_err(|error| error.to_string())?;
+    Ok(exit::SUCCESS)
 }
 
 /// Hand the documents to the interactive browser.
@@ -96,11 +164,10 @@ fn browse(
     let entries: Vec<tui::Entry> = documents
         .iter()
         .filter(|(document, _)| document.has_changes())
-        .map(|(document, pair)| tui::Entry {
-            document: document.clone(),
+        .map(|(document, pair)| {
             // Unfolding needs the sources. A patch never had them, so the
             // browser says so rather than offering a key that does nothing.
-            unfolded: pair.map(|pair| {
+            let unfolded = pair.map(|pair| {
                 diff::compare(
                     &pair.old,
                     &pair.new,
@@ -109,13 +176,13 @@ fn browse(
                         ..args.diff_options()
                     },
                 )
-            }),
-            highlighting: match pair {
-                Some(pair) if args.syntax_enabled(&options.theme) => {
-                    Highlighting::of(&pair.old, &pair.new)
-                }
+            });
+            let syntax = args.syntax_enabled(&options.theme);
+            let sources = pair.map(|pair| (pair.old.clone(), pair.new.clone()));
+            tui::Entry::lazy(document.clone(), unfolded, move || match &sources {
+                Some((old, new)) if syntax => Highlighting::of(old, new),
                 _ => Highlighting::none(),
-            },
+            })
         })
         .collect();
 

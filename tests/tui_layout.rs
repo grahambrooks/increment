@@ -20,9 +20,9 @@ use ratatui::backend::TestBackend;
 fn entry(name: &str, old: &str, new: &str) -> Entry {
     let old = SourceFile::from_text(format!("a/{name}"), old);
     let new = SourceFile::from_text(format!("b/{name}"), new);
-    Entry {
-        document: compare(&old, &new, &DiffOptions::default()),
-        unfolded: Some(compare(
+    Entry::new(
+        compare(&old, &new, &DiffOptions::default()),
+        Some(compare(
             &old,
             &new,
             &DiffOptions {
@@ -30,8 +30,8 @@ fn entry(name: &str, old: &str, new: &str) -> Entry {
                 ..DiffOptions::default()
             },
         )),
-        highlighting: Highlighting::none(),
-    }
+        Highlighting::none(),
+    )
 }
 
 /// Forty lines with edits at 5 and 35 — long enough to fold, scroll and map.
@@ -204,4 +204,121 @@ fn the_change_map_marks_where_the_reader_is() {
         })
         .count();
     assert!(reversed > 0, "the viewport indicator is missing");
+}
+
+// ---------------------------------------------------------------------------
+// The review flow: a commit list, and the selected commit's diff below it.
+// ---------------------------------------------------------------------------
+
+use gdiff::source::git::Commit;
+use gdiff::tui::review::{Event, Loader, Review};
+
+fn commit(n: usize, summary: &str) -> Commit {
+    Commit {
+        short_id: format!("{n:07x}"),
+        id: format!("{n:040x}"),
+        summary: summary.to_owned(),
+        author: "Graham Brooks".to_owned(),
+        date: "2026-08-26".to_owned(),
+    }
+}
+
+fn review() -> Review<'static> {
+    let commits = vec![
+        commit(0x3f2a1c9, "Phase 5: move detection and whitespace modes"),
+        commit(0x10f4df2, "Phase 4: the interactive browser"),
+        commit(0x5ab2f81, "Phase 3: git integration"),
+        commit(0x47763dd, "Phases 1 and 2: the aligned split view"),
+        commit(0x039c984, "Phase 0: scaffold"),
+    ];
+    let loader: Loader<'static> = Box::new(|_| Ok(vec![long("src/diff/moves.rs")]));
+    Review::new(
+        commits,
+        loader,
+        RenderOptions {
+            theme: Theme::none(),
+            ..RenderOptions::default()
+        },
+    )
+}
+
+fn draw_review(review: &mut Review<'_>, width: u16, height: u16) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
+    terminal
+        .draw(|frame| gdiff::tui::draw::review(frame, review))
+        .expect("draws");
+
+    let buffer = terminal.backend().buffer().clone();
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol().to_owned())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn the_commit_list_before_anything_is_opened() {
+    insta::assert_snapshot!(draw_review(&mut review(), 90, 12));
+}
+
+#[test]
+fn opening_a_commit_splits_the_view() {
+    let mut review = review();
+    let _ = draw_review(&mut review, 100, 24);
+    review.apply(Event::Down);
+    review.apply(Event::Open);
+    insta::assert_snapshot!(draw_review(&mut review, 100, 24));
+}
+
+#[test]
+fn the_selected_commit_is_marked_in_the_list() {
+    let mut review = review();
+    let _ = draw_review(&mut review, 90, 12);
+    review.apply(Event::Down);
+    review.apply(Event::Down);
+
+    let mut terminal = Terminal::new(TestBackend::new(90, 12)).expect("terminal");
+    terminal
+        .draw(|frame| gdiff::tui::draw::review(frame, &mut review))
+        .expect("draws");
+    let buffer = terminal.backend().buffer().clone();
+
+    // Exactly one row of the list is highlighted, and it is the third.
+    let highlighted: Vec<u16> = (0..buffer.area.height)
+        .filter(|&y| {
+            buffer[(2, y)]
+                .modifier
+                .contains(ratatui::style::Modifier::REVERSED)
+        })
+        .collect();
+    assert_eq!(highlighted.len(), 1, "rows highlighted: {highlighted:?}");
+}
+
+#[test]
+fn a_narrow_review_still_draws() {
+    for (width, height) in [(40, 8), (24, 6), (14, 4)] {
+        let mut review = review();
+        let drawn = draw_review(&mut review, width, height);
+        assert!(!drawn.is_empty(), "{width}x{height} drew nothing");
+    }
+}
+
+#[test]
+fn an_empty_history_says_so() {
+    let loader: Loader<'static> = Box::new(|_| Ok(Vec::new()));
+    let mut empty = Review::new(
+        Vec::new(),
+        loader,
+        RenderOptions {
+            theme: Theme::none(),
+            ..RenderOptions::default()
+        },
+    );
+    let drawn = draw_review(&mut empty, 60, 8);
+    assert!(drawn.contains("no commits"), "{drawn}");
 }

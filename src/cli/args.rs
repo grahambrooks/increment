@@ -131,6 +131,23 @@ pub enum Command {
         #[arg(last = false)]
         paths: Vec<PathBuf>,
     },
+
+    /// Work through a branch commit by commit.
+    ///
+    /// Opens a commit list; `Enter` shows what that commit did, and moving the
+    /// selection with the split open follows it. Always interactive.
+    Review {
+        /// `HEAD`, `main..feature`, … Defaults to the current branch.
+        rev: Option<String>,
+
+        /// Limit to these paths.
+        #[arg(last = false)]
+        paths: Vec<PathBuf>,
+
+        /// Most commits to list.
+        #[arg(long, default_value_t = 200, value_name = "COUNT")]
+        limit: usize,
+    },
 }
 
 /// What the arguments add up to.
@@ -143,6 +160,11 @@ pub enum Source<'a> {
     Git {
         rev: Option<&'a str>,
         paths: &'a [PathBuf],
+    },
+    Review {
+        rev: Option<&'a str>,
+        paths: &'a [PathBuf],
+        limit: usize,
     },
     Patch,
 }
@@ -211,6 +233,11 @@ impl Args {
             (Some(Command::Git { rev, paths }), ..) => Ok(Source::Git {
                 rev: rev.as_deref(),
                 paths,
+            }),
+            (Some(Command::Review { rev, paths, limit }), ..) => Ok(Source::Review {
+                rev: rev.as_deref(),
+                paths,
+                limit: *limit,
             }),
             (None, true, ..) => Ok(Source::Patch),
             (None, false, Some(old), Some(new)) => Ok(Source::Files { old, new }),
@@ -421,6 +448,19 @@ mod tests {
                 "{args:?} resolved to {:?}",
                 parsed.source()
             );
+        }
+    }
+
+    #[test]
+    fn review_carries_its_revision_paths_and_limit() {
+        let args = parse_bare(&["review", "main..feature", "src", "--limit", "50"]);
+        match args.source().expect("resolves") {
+            Source::Review { rev, paths, limit } => {
+                assert_eq!(rev, Some("main..feature"));
+                assert_eq!(paths.len(), 1);
+                assert_eq!(limit, 50);
+            }
+            other => panic!("expected a review source, got {other:?}"),
         }
     }
 

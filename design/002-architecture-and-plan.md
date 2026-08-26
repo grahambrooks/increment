@@ -237,25 +237,23 @@ test asserting exactly that. *Met* — and checked against git: on the same pure
   no edits, which reads as nothing having happened. Move counts now appear in the split header,
   the browser's file list and its status line — the same failure the file list had in phase 4.
 
-#### Structural diff: declined, pending a decision
+#### Structural diff: declined (2026-08-26)
 
 **`--structural` via tree-sitter cannot be built without breaking the project's pure-Rust
 constraint.** tree-sitter's core is C (`lib.c`, `stack.c`, `lexer.c`) and every grammar ships
 `parser.c` and `scanner.c`; both compile through `cc`. Adding it makes `make pure-rust` fail by
 design, and puts a C toolchain in the path of every build on every platform.
 
-That is a constraint conflict, not a scheduling problem, so it is Graham's to resolve. The
-options, with a recommendation:
+That is a constraint conflict rather than a scheduling problem. **Decided: ceded to difftastic.**
+It is what difftastic is excellent at, gdiff's pitch is alignment rather than syntax-awareness,
+and the two compose — `difft` for "what changed semantically", `gdiff` for "show me the two
+versions". The alternatives considered and rejected: relaxing the constraint behind an
+off-by-default cargo feature (then "pure Rust, no C toolchain" is true only of the default
+features, and `make pure-rust` has to know the difference), and waiting for a pure-Rust parsing
+stack with comparable language coverage (nothing today is close).
 
-1. **Cede structural diff to difftastic** *(recommended)*. It is the thing difftastic is
-   excellent at, gdiff's pitch is alignment rather than syntax-awareness, and the two compose
-   fine — `difft` for "what changed semantically", `gdiff` for "show me the two versions".
-2. Relax the constraint for an off-by-default cargo feature. Honest, but "pure Rust" stops being
-   true of the project and starts being true only of its default features.
-3. Wait for a pure-Rust parsing stack with comparable language coverage. Nothing today is close.
-
-This is [open question 4](#6-open-questions-for-graham), and answering it 1 would let that
-question be closed and the claim dropped from the design.
+`--structural` is therefore not a planned flag, and O2 in `001` is settled at option A rather
+than C.
 
 ### Release
 CalVer (`2026.9.0`), GitHub Actions builds the binaries, Homebrew formula in this repo updated by
@@ -286,7 +284,6 @@ formula works on this machine.
    or skip it and stand on `git difftool` plus `gdiff git`?~~ **Answered in phase 3: shipped,
    with its limits stated where someone configuring it will read them.** It re-diffs each hunk,
    so the pairing and emphasis are still gdiff's.
-4. **Structural diff** — a real goal for this project, or explicitly ceded to difftastic?
-   **Phase 5 found this is a constraint conflict**: tree-sitter is C, so it cannot be added
-   without breaking "pure Rust, no C toolchain". See the phase 5 note above. Recommendation:
-   cede it.
+4. ~~**Structural diff** — a real goal for this project, or explicitly ceded to difftastic?~~
+   **Answered 2026-08-26: ceded.** tree-sitter is C, so it cannot be added without breaking
+   "pure Rust, no C toolchain". See the phase 5 note above.
