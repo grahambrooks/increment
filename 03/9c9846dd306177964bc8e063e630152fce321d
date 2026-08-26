@@ -1,0 +1,75 @@
+.github/workflows/release.yml
+  s_3c463378fb2c1d::t_32b0148ccbb659 1-250
+src/render/mod.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-10
+src/model/mod.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-10
+src/cli/args.rs
+  s_3c463378fb2c1d::t_adb0544071d91d 1-83
+src/main.rs
+  s_3c463378fb2c1d::t_2a4318b8ac86ac 1-44
+design/002-architecture-and-plan.md
+  s_3c463378fb2c1d::t_6972a220e48197 1-82,87,98,101-170
+  s_3c463378fb2c1d::t_cadc90926fe9a5 83-86,88-97,99-100
+src/theme/mod.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-6
+.github/workflows/build.yml
+  s_3c463378fb2c1d::t_15c384040dec07 1-65
+prek.toml
+  s_3c463378fb2c1d::t_c8a855ce506bf8 1-40
+README.md
+  s_3c463378fb2c1d::t_7158aaabd52541 1-60
+src/highlight/mod.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-8
+design/001-visual-diff-state-of-the-art.md
+  s_3c463378fb2c1d::t_2652039c627453 1-195
+src/cli/mod.rs
+  s_3c463378fb2c1d::t_adb0544071d91d 1-5
+Formula/README.md
+  s_3c463378fb2c1d::t_7158aaabd52541 1-14
+Cargo.toml
+  s_3c463378fb2c1d::t_a79e5b4f36322c 1-57
+src/lib.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-24
+src/source/mod.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-9
+.gitignore
+  s_3c463378fb2c1d::t_a79e5b4f36322c 1-6
+LICENSE
+  s_3c463378fb2c1d::t_a79e5b4f36322c 1-21
+CLAUDE.md
+  s_3c463378fb2c1d::t_4db3bf47e9eeb7 1-58
+src/exit.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-19
+rust-toolchain.toml
+  s_3c463378fb2c1d::t_a79e5b4f36322c 1-8
+src/diff/mod.rs
+  s_3c463378fb2c1d::t_1e08b0b5e91144 1-21
+src/cli/surface.rs
+  s_3c463378fb2c1d::t_adb0544071d91d 1-96
+tests/cli_contract.rs
+  s_3c463378fb2c1d::t_7781c98200d08e 1-46
+Makefile
+  s_3c463378fb2c1d::t_c8a855ce506bf8 1-94
+.github/render-formula.py
+  s_3c463378fb2c1d::t_32b0148ccbb659 1-55,58-84,88,93-102
+  s_3c463378fb2c1d::t_69948d8a66c887 56-57,85-87,89-92
+Cargo.lock
+  s_3c463378fb2c1d::t_0fd7633842739e 1-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "039c9846dd306177964bc8e063e630152fce321d",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
