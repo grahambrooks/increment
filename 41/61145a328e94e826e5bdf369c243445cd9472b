@@ -1,0 +1,82 @@
+design/002-architecture-and-plan.md
+  s_3c463378fb2c1d::t_c41a40af115af7 240,247-253,255-256,287-289
+src/source/git.rs
+  s_3c463378fb2c1d::t_ef9347b0c62917 112-114,120-121
+  s_3c463378fb2c1d::t_3b56ef29813170 115-117,122
+  s_3c463378fb2c1d::t_6509bda58ff120 90
+  s_3c463378fb2c1d::t_bc3ccd06db17a8 42-89,91-111,118-119,123-151
+CLAUDE.md
+  s_3c463378fb2c1d::t_c41a40af115af7 52-60
+  s_3c463378fb2c1d::t_8218d8ef7d821e 28-32
+design/001-visual-diff-state-of-the-art.md
+  s_3c463378fb2c1d::t_c41a40af115af7 115-118
+src/highlight/mod.rs
+  s_3c463378fb2c1d::t_accb0b6e3ea593 28-30,105-112,207-213,215
+  s_3c463378fb2c1d::t_60291ab1ed08ac 214,216
+src/cli/args.rs
+  s_3c463378fb2c1d::t_b237f0b2579048 134-150,237-241,454-463
+  s_3c463378fb2c1d::t_da2a6d74975809 164-168
+  s_3c463378fb2c1d::t_6328695fda87ec 464-466
+src/tui/state.rs
+  s_3c463378fb2c1d::t_31e95d20a48b98 12-13,28-35,39-75
+  s_3c463378fb2c1d::t_bc1282a7c9dfac 150-154,172,182-189
+  s_3c463378fb2c1d::t_c51ef5ad983885 394
+  s_3c463378fb2c1d::t_a27e50b7ce4d6f 534-535,543,551-552
+  s_3c463378fb2c1d::t_a8230da8abc404 190
+tests/tui_layout.rs
+  s_3c463378fb2c1d::t_e2e97f0d0bbdbb 208-324
+  s_3c463378fb2c1d::t_a27e50b7ce4d6f 23-25,33-34
+design/003-review-flow.md
+  s_3c463378fb2c1d::t_8218d8ef7d821e 3,72-75,78,80,82-108,118-123,125,127-132
+src/tui/keys.rs
+  s_3c463378fb2c1d::t_7faff6a29b6771 9,53-91,94-97,99-100,210-222,227-270,301,315-331
+  s_3c463378fb2c1d::t_3b56ef29813170 92-93,98,271-288
+  s_3c463378fb2c1d::t_6509bda58ff120 223-226
+  s_3c463378fb2c1d::t_bc1282a7c9dfac 110-120,289-300,302-314
+  s_3c463378fb2c1d::t_9a0b578278e771 332
+README.md
+  s_3c463378fb2c1d::t_8218d8ef7d821e 35-56
+tests/rendering.rs
+  s_3c463378fb2c1d::t_c51ef5ad983885 130
+src/tui/mod.rs
+  s_3c463378fb2c1d::t_48f3c087ea3dad 13
+  s_3c463378fb2c1d::t_022135e0159c2a 21,23,44-65,67-71,74-78
+  s_3c463378fb2c1d::t_31e95d20a48b98 66,72-73
+  s_3c463378fb2c1d::t_98c8715ddcfd9b 79
+src/tui/review.rs
+  s_3c463378fb2c1d::t_6509bda58ff120 172-176,277
+  s_3c463378fb2c1d::t_a27e50b7ce4d6f 301-305
+  s_3c463378fb2c1d::t_48f3c087ea3dad 1-171,177-243,247-276,278-300,306-508
+  s_3c463378fb2c1d::t_bc1282a7c9dfac 244-246
+src/tui/draw.rs
+  s_3c463378fb2c1d::t_022135e0159c2a 19,340-378,381-430,432-458
+  s_3c463378fb2c1d::t_042a11d980cb3b 379-380
+  s_3c463378fb2c1d::t_6509bda58ff120 43,431
+  s_3c463378fb2c1d::t_bc1282a7c9dfac 18,217,222,253-254
+  s_3c463378fb2c1d::t_48f3c087ea3dad 35-42
+src/main.rs
+  s_3c463378fb2c1d::t_b237f0b2579048 33-40,95-118,120-122,126-131,145-150
+  s_3c463378fb2c1d::t_675387a1776965 85-86,119
+  s_3c463378fb2c1d::t_a27e50b7ce4d6f 123-125,132-144,167,170,179-183,185
+  s_3c463378fb2c1d::t_d09f9d35edde7e 151-152
+tests/snapshots/tui_layout__opening_a_commit_splits_the_view.snap
+  s_3c463378fb2c1d::t_01247ea95139c6 1-28
+tests/snapshots/tui_layout__the_commit_list_before_anything_is_opened.snap
+  s_3c463378fb2c1d::t_ed27a95bda5dc6 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "4161145a328e94e826e5bdf369c243445cd9472b",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
