@@ -1,0 +1,58 @@
+src/theme/mod.rs
+  s_3c463378fb2c1d::t_1fcbcc158cfb2f 39-42,84-85,105-106,123-124,152-155,179,188-196,228-229
+src/model/row.rs
+  s_3c463378fb2c1d::t_80b0601d9129f1 31-38,94-109,121-125
+src/tui/draw.rs
+  s_3c463378fb2c1d::t_ad683592e251f1 68,73-75,227-231,233
+  s_3c463378fb2c1d::t_1fcbcc158cfb2f 161,184-186
+src/render/split.rs
+  s_3c463378fb2c1d::t_ad683592e251f1 78,89-99,634-667
+  s_3c463378fb2c1d::t_1fcbcc158cfb2f 123-126,280-290
+  s_3c463378fb2c1d::t_a48653a9ec49ae 668
+src/diff/engine.rs
+  s_3c463378fb2c1d::t_7ffabc1ecf359d 14-40,70-81,110-132,182
+  s_3c463378fb2c1d::t_78d398454b9d6e 137-142,150-155,163-168
+  s_3c463378fb2c1d::t_ae1cca19fd3640 192-197
+src/render/unified.rs
+  s_3c463378fb2c1d::t_1fcbcc158cfb2f 99-128
+src/diff/align.rs
+  s_3c463378fb2c1d::t_70738274b5d033 26,44,56,71,76-92,119-122,125-128,237,380
+  s_3c463378fb2c1d::t_78d398454b9d6e 225
+  s_3c463378fb2c1d::t_6b7495a61ecb1a 231-236,374-379
+src/diff/mod.rs
+  s_3c463378fb2c1d::t_7ffabc1ecf359d 11-14,22,25,36-40,48-49,62-66,83-84,107-109,113-118,121-123,132-145,154-165,174-176
+  s_3c463378fb2c1d::t_67a90a01b8214b 85-88,90-93,110-112
+  s_3c463378fb2c1d::t_2a5645fb4eac44 56-61,67,89,94-106,119-120,124-131,146-153,166-173
+  s_3c463378fb2c1d::t_a3d79d24a0d65a 177
+src/cli/args.rs
+  s_3c463378fb2c1d::t_2a5645fb4eac44 100-116,231-238,341-363
+  s_3c463378fb2c1d::t_4a61d464da50e2 364
+src/model/document.rs
+  s_3c463378fb2c1d::t_80b0601d9129f1 32-37,42,86-88
+src/diff/moves.rs
+  s_3c463378fb2c1d::t_80b0601d9129f1 1-140,142-145,152-162,170-171,182,184,190-192,203-211,219-220,222,224-233,238-260,262,270,274-275,280-281
+  s_3c463378fb2c1d::t_2a5645fb4eac44 185-189,234-237
+  s_3c463378fb2c1d::t_6b7495a61ecb1a 146-151
+  s_3c463378fb2c1d::t_67a90a01b8214b 163-169,172-181,183,193-202,212-218,221,223,261,263-269,271-273,276-279
+  s_3c463378fb2c1d::t_78d398454b9d6e 141
+README.md
+  s_3c463378fb2c1d::t_36de1222542ede 13,15-16,19-22,101-103
+design/002-architecture-and-plan.md
+  s_3c463378fb2c1d::t_29e28fc38c2a15 214-215,218-258,290-292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "10f4df2dbe86a0df272e408a0752081ddc841124",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
