@@ -1,0 +1,34 @@
+---
+source: tests/rendering.rs
+expression: "draw(&fixture(None), View::Split, Some(120), Wrap::Wrap)"
+---
+a/catalog.rs → b/catalog.rs  +3 -0 ~2
+fn render(&self, data: &Catalog) -> View {            │  1    1 │fn render(&self, data: &Catalog) -> View {             
+    let page = Page::new();                           │  2    2 │    let page = Page::new();                            
+    match data.get() {                                │  3    3 │    match data.get() {                                 
+        None => view! { <p class="muted">"Loading…"</p│  4    4 │        None => view! { <p class="muted">"Loading…"</p>
+> }.into_any(),                                       │         │ }.into_any(),                                         
+        Some(_) => view! {                            │  5    5 │        Some(_) => view! {                             
+            <div class="results">                     │  6    6 │            <div class="results">                      
+                <table>                               │  7    7 │                <table>                                
+                    <thead>                           │  8    8 │                    <thead>                            
+                        <tr><th>"Name"</th><th>"System│  9 ~  9 │                        <tr><th>"Name"</th><th>"Lifecyc
+"</th></tr>                                           │    ~    │le"</th></tr>                                          
+                    </thead>                          │ 10   10 │                    </thead>                           
+                    <tbody>                           │ 11   11 │                    <tbody>                            
+                        {move || {                    │ 12   12 │                        {move || {                     
+                            let rows = rows();        │ 13   13 │                            let rows = rows();         
+                                                      │    + 14 │                            let columns = Columns::for_
+                                                      │    +    │entities(&rows);                                       
+                            rows.into_iter().map(entit│ 14 ~ 15 │                            rows.into_iter()           
+y_row).collect_view()                                 │    ~    │                                                       
+                                                      │    + 16 │                                .map(|entity| entity_ro
+                                                      │    +    │w(entity, columns))                                    
+                                                      │    + 17 │                                .collect_view()        
+                        }}                            │ 15   18 │                        }}                             
+                    </tbody>                          │ 16   19 │                    </tbody>                           
+                </table>                              │ 17   20 │                </table>                               
+            </div>                                    │ 18   21 │            </div>                                     
+        }.into_any(),                                 │ 19   22 │        }.into_any(),                                  
+    }                                                 │ 20   23 │    }                                                  
+}                                                     │ 21   24 │}

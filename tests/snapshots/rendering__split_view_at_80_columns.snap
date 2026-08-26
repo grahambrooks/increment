@@ -1,0 +1,31 @@
+---
+source: tests/rendering.rs
+expression: "draw(&fixture(Some(3)), View::Split, Some(80), Wrap::Wrap)"
+---
+a/catalog.rs → b/catalog.rs  +3 -0 ~2
+───────────────────────────── ⋯ 5 unchanged lines ──────────────────────────────
+            <div class="results"> │  6    6 │            <div class="results">  
+                <table>           │  7    7 │                <table>            
+                    <thead>       │  8    8 │                    <thead>        
+                        <tr><th>"N│  9 ~  9 │                        <tr><th>"Na
+ame"</th><th>"System"</th></tr>   │    ~    │me"</th><th>"Lifecycle"</th></tr>  
+                    </thead>      │ 10   10 │                    </thead>       
+                    <tbody>       │ 11   11 │                    <tbody>        
+                        {move || {│ 12   12 │                        {move || { 
+                            let ro│ 13   13 │                            let row
+ws = rows();                      │         │s = rows();                        
+                                  │    + 14 │                            let col
+                                  │    +    │umns = Columns::for_entities(&rows)
+                                  │    +    │;                                  
+                            rows.i│ 14 ~ 15 │                            rows.in
+nto_iter().map(entity_row).collect│    ~    │to_iter()                          
+_view()                           │    ~    │                                   
+                                  │    + 16 │                                .ma
+                                  │    +    │p(|entity| entity_row(entity, colum
+                                  │    +    │ns))                               
+                                  │    + 17 │                                .co
+                                  │    +    │llect_view()                       
+                        }}        │ 15   18 │                        }}         
+                    </tbody>      │ 16   19 │                    </tbody>       
+                </table>          │ 17   20 │                </table>           
+───────────────────────────── ⋯ 4 unchanged lines ──────────────────────────────

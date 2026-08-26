@@ -10,10 +10,29 @@ right edge — the JetBrains diff view, in a terminal, in a pipe.
 
 ## Status
 
-**Phase 0 — scaffold.** The layering, the gate and the release shape are in
-place; nothing is diffed yet. `gdiff a.rs b.rs` says so and exits 2 rather than
-printing an empty diff. The plan and its per-phase completion criteria are in
+**Phases 0–2 done.** gdiff diffs two files and renders them side by side, with
+alignment, word-level highlighting, folding, syntax colour and a JSON format.
+Git integration (phase 3) and the interactive browser (phase 4) are next; the
+per-phase criteria are in
 [`design/002-architecture-and-plan.md`](design/002-architecture-and-plan.md).
+
+```sh
+gdiff old.rs new.rs              # split where the terminal is wide enough
+gdiff --view unified old.rs new.rs
+gdiff --format json old.rs new.rs
+```
+
+| Flag | |
+|---|---|
+| `--view auto\|split\|unified` | `auto` splits at 120 columns or wider |
+| `--format text\|json` | |
+| `-U N`, `--full` | context lines either side of a change; `--full` folds nothing |
+| `--wrap wrap\|truncate` | what to do with a line too wide for its pane |
+| `--theme auto\|dark\|ansi\|none` | `dark` tints backgrounds, `ansi` uses the sixteen colours |
+| `--syntax auto\|on\|off` | `auto` highlights only where the palette leaves the foreground free |
+| `--color auto\|always\|never` | colour strips itself when piped regardless |
+| `--algorithm histogram\|myers` | |
+| `--width N`, `--min-split-width N` | |
 
 ## Why another diff tool
 

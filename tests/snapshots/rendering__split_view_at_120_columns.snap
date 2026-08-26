@@ -1,0 +1,26 @@
+---
+source: tests/rendering.rs
+expression: "draw(&fixture(Some(3)), View::Split, Some(120), Wrap::Wrap)"
+---
+a/catalog.rs → b/catalog.rs  +3 -0 ~2
+───────────────────────────────────────────────── ⋯ 5 unchanged lines ──────────────────────────────────────────────────
+            <div class="results">                     │  6    6 │            <div class="results">                      
+                <table>                               │  7    7 │                <table>                                
+                    <thead>                           │  8    8 │                    <thead>                            
+                        <tr><th>"Name"</th><th>"System│  9 ~  9 │                        <tr><th>"Name"</th><th>"Lifecyc
+"</th></tr>                                           │    ~    │le"</th></tr>                                          
+                    </thead>                          │ 10   10 │                    </thead>                           
+                    <tbody>                           │ 11   11 │                    <tbody>                            
+                        {move || {                    │ 12   12 │                        {move || {                     
+                            let rows = rows();        │ 13   13 │                            let rows = rows();         
+                                                      │    + 14 │                            let columns = Columns::for_
+                                                      │    +    │entities(&rows);                                       
+                            rows.into_iter().map(entit│ 14 ~ 15 │                            rows.into_iter()           
+y_row).collect_view()                                 │    ~    │                                                       
+                                                      │    + 16 │                                .map(|entity| entity_ro
+                                                      │    +    │w(entity, columns))                                    
+                                                      │    + 17 │                                .collect_view()        
+                        }}                            │ 15   18 │                        }}                             
+                    </tbody>                          │ 16   19 │                    </tbody>                           
+                </table>                              │ 17   20 │                </table>                               
+───────────────────────────────────────────────── ⋯ 4 unchanged lines ──────────────────────────────────────────────────

@@ -24,7 +24,7 @@ TAG      = v$(VERSION)
 
 .PHONY: help
 help:
-	@echo 'make check        fmt, clippy, tests — the pre-commit gate'
+	@echo 'make check        fmt, clippy, tests, no-C-deps — the pre-commit gate'
 	@echo 'make build        debug build'
 	@echo 'make test         tests only'
 	@echo 'make fmt          format in place'
@@ -34,10 +34,22 @@ help:
 	@echo 'make release      cut $(TAG) — bump, commit, tag, push'
 
 .PHONY: check
-check:
+check: pure-rust
 	cargo fmt --all --check
 	cargo clippy --all-targets --all-features -- -D warnings
 	cargo test --all-features
+
+# The pure-Rust constraint, as a check rather than a comment. syntect and
+# two-face both default to the `onig` C library, and cargo unifies features
+# across the graph — so one of them reverting to defaults quietly reintroduces
+# a C toolchain dependency that nothing else here would catch.
+.PHONY: pure-rust
+pure-rust:
+	@if cargo tree -e normal,build 2>/dev/null | grep -qiE 'onig|onig_sys'; then \
+		echo 'pure-rust: the onig C library is back in the dependency tree'; \
+		cargo tree -i onig; \
+		exit 1; \
+	fi
 
 .PHONY: build
 build:

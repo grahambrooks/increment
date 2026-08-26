@@ -66,12 +66,13 @@ source ──▶ FilePair ──▶ line diff (histogram) ──▶ blocks
 |---|---|---|
 | `imara-diff` | 0.2 | line and word diff, histogram default |
 | `syntect` | 5.3 | highlighting — `default-features = false, features = ["regex-fancy"]` (avoids the `onig` C library) |
-| `two-face` | 0.5 | bat's syntax and theme assets |
+| `two-face` | 0.5 | bat's syntax and theme assets — **also** `default-features = false, features = ["syntect-fancy"]`, or it drags `onig` back in |
 | `anstream` / `anstyle` | 1.0 | colour that self-strips when piped |
 | `unicode-width` | 0.2 | column arithmetic |
 | `unicode-segmentation` | 1 | word tokenizer |
 | `clap` | 4 | CLI |
 | `serde` / `serde_json` | 1 | `--format json` |
+| `terminal-size` | 0.4 | the terminal's width; `None` means "not a terminal", which is what stops the split view padding a pipe |
 | `gix` | latest | phase 3 git integration, pure Rust |
 | `ratatui` | 0.30 | phase 4 TUI |
 | `insta` (dev) | 1 | snapshot tests for every renderer |
@@ -99,24 +100,57 @@ Two things went beyond the line above, both deliberate:
 `cargo fmt --check` all passing. *Locally green; the GitHub remote does not exist yet, so the
 CI half of this criterion is not met.*
 
-### Phase 1 — Core model and unified renderer
+### Phase 1 — Core model and unified renderer — **done (2026-08-26)**
 Line diff via imara-diff; block classification; intra-block pairing; word-level spans; the
 `Row` model; `render::unified`; `--format json`.
 
 **Done when:** `gdiff a.rs b.rs` prints a styled unified diff with changed substrings
 highlighted; `gdiff --format json a.rs b.rs` emits the same document as JSON; piping produces no
-escape codes; insta snapshots cover the fixture set.
+escape codes; insta snapshots cover the fixture set. *All met.*
 
-### Phase 2 — The split view (the product)
+Three things the work settled that the plan had not:
+
+- **A fourth row kind, `Replaced`.** Two lines in the same position that are *not* an edit of
+  each other. Stacking them — a removal above an addition — doubles the height of every replaced
+  block and reads badly; both JetBrains and GitHub put them side by side. `Modified` claims a
+  correspondence and carries inline emphasis; `Replaced` claims none and carries none, each side
+  keeping its own colour. The markers `~` and `!` keep them apart without colour.
+- **Similarity is weighted by word length.** Unweighted, `(`, `)` and `;` count for as much as an
+  identifier, and `let b = 2;` pairs with `let inserted = 0;` at 0.6 — a confident and completely
+  wrong set of highlights. Two tests pin the cases that drove the change.
+- **The unified renderer's output is a real patch**, asserted by a test that applies it back to
+  the old file and compares. It may interleave a `+` before a `-` within a hunk where the
+  alignment ran that way; that is legal unified diff and applies correctly, but it is not the
+  grouping `diff -u` emits.
+
+### Phase 2 — The split view (the product) — **done (2026-08-26)**
 `render::split`: two panes, shared centre gutter with both line numbers, filler rows, block
 colour by kind, inline highlight on modified pairs, syntax highlighting both panes, folding of
-unchanged runs with a fold summary row, change map column, wrapping and the narrow-terminal
-fallback.
+unchanged runs with a fold summary row, wrapping and the narrow-terminal fallback.
 
 **Done when:** rendering the reference sample side by side reproduces the structure in
 `JetBrainsDiff.png` — aligned corresponding lines, add/remove/modify distinguished, inline
 highlight inside modified lines, unchanged regions folded — verified by snapshot tests at 80,
-120 and 200 columns, and by eye against the screenshot.
+120 and 200 columns, and by eye against the screenshot. *All met.*
+
+Decisions taken during the work:
+
+- **The change map is deferred to the TUI** — this answers open question 2 below. In a scrolling
+  pager it restates the marker column already in the gutter; it only says something new when
+  there is a viewport for it to sit outside of. Stdout gets a summary header instead:
+  `old → new  +18 -14 ~1`.
+- **Syntax highlighting composes with the diff, or it does not run.** Token colour goes on the
+  *foreground*, change kind on the *background*, so the two coexist. `--syntax auto` therefore
+  highlights only where the palette leaves the foreground free — the `dark` palette, not `ansi`,
+  which has already spent colour saying what changed. `--syntax on` overrides.
+- **`two-face` had to be pinned as well.** Taking `syntect` with `default-features = false` was
+  not enough to keep the `onig` C library out: `two-face` depends on syntect *with* defaults and
+  cargo unifies features across the graph. Both need `syntect-fancy`. `cargo tree -i onig`
+  finding nothing is the check worth repeating.
+- **Highlighting is a precomputed input to rendering, not part of the model.** A syntax parser is
+  stateful, so colours have to come from the whole file — including the lines folding hides — and
+  `model` may not know about colour. `Highlighting::of(&old, &new)` is built at the call site and
+  handed to the renderer.
 
 ### Phase 3 — Git integration
 `source::git` via `gix` (worktree/index/revision, `HEAD~1..HEAD`, path filters); `source::patch`
@@ -164,7 +198,8 @@ formula works on this machine.
 
 1. **Scope of v1** — is the split view against two files enough to call it v1, with git support
    in the following release, or should phase 3 land before the first tag?
-2. **The change map** — right-edge minimap column in stdout mode too, or TUI only?
+2. ~~**The change map** — right-edge minimap column in stdout mode too, or TUI only?~~
+   **Answered during phase 2: TUI only.** In a pager it restates the gutter.
 3. **Pager mode** — worth shipping given it structurally cannot do folding or the change map, or
    skip it and stand on `git difftool` plus `gdiff git`?
 4. **Structural diff** — a real goal for this project, or explicitly ceded to difftastic?

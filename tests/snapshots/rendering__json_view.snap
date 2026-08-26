@@ -1,0 +1,200 @@
+---
+source: tests/rendering.rs
+expression: "String::from_utf8(buffer).expect(\"utf-8\")"
+---
+{
+  "old": {
+    "name": "a/catalog.rs",
+    "lines": 21
+  },
+  "new": {
+    "name": "b/catalog.rs",
+    "lines": 24
+  },
+  "stats": {
+    "added": 3,
+    "removed": 0,
+    "modified": 2
+  },
+  "rows": [
+    {
+      "kind": "fold",
+      "hidden": 5
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 6,
+        "text": "            <div class=\"results\">"
+      },
+      "right": {
+        "number": 6,
+        "text": "            <div class=\"results\">"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 7,
+        "text": "                <table>"
+      },
+      "right": {
+        "number": 7,
+        "text": "                <table>"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 8,
+        "text": "                    <thead>"
+      },
+      "right": {
+        "number": 8,
+        "text": "                    <thead>"
+      }
+    },
+    {
+      "kind": "modified",
+      "left": {
+        "number": 9,
+        "text": "                        <tr><th>\"Name\"</th><th>\"System\"</th></tr>",
+        "emphasis": [
+          {
+            "start": 48,
+            "end": 54
+          }
+        ]
+      },
+      "right": {
+        "number": 9,
+        "text": "                        <tr><th>\"Name\"</th><th>\"Lifecycle\"</th></tr>",
+        "emphasis": [
+          {
+            "start": 48,
+            "end": 57
+          }
+        ]
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 10,
+        "text": "                    </thead>"
+      },
+      "right": {
+        "number": 10,
+        "text": "                    </thead>"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 11,
+        "text": "                    <tbody>"
+      },
+      "right": {
+        "number": 11,
+        "text": "                    <tbody>"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 12,
+        "text": "                        {move || {"
+      },
+      "right": {
+        "number": 12,
+        "text": "                        {move || {"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 13,
+        "text": "                            let rows = rows();"
+      },
+      "right": {
+        "number": 13,
+        "text": "                            let rows = rows();"
+      }
+    },
+    {
+      "kind": "added",
+      "right": {
+        "number": 14,
+        "text": "                            let columns = Columns::for_entities(&rows);"
+      }
+    },
+    {
+      "kind": "modified",
+      "left": {
+        "number": 14,
+        "text": "                            rows.into_iter().map(entity_row).collect_view()",
+        "emphasis": [
+          {
+            "start": 44,
+            "end": 75
+          }
+        ]
+      },
+      "right": {
+        "number": 15,
+        "text": "                            rows.into_iter()"
+      }
+    },
+    {
+      "kind": "added",
+      "right": {
+        "number": 16,
+        "text": "                                .map(|entity| entity_row(entity, columns))"
+      }
+    },
+    {
+      "kind": "added",
+      "right": {
+        "number": 17,
+        "text": "                                .collect_view()"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 15,
+        "text": "                        }}"
+      },
+      "right": {
+        "number": 18,
+        "text": "                        }}"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 16,
+        "text": "                    </tbody>"
+      },
+      "right": {
+        "number": 19,
+        "text": "                    </tbody>"
+      }
+    },
+    {
+      "kind": "equal",
+      "left": {
+        "number": 17,
+        "text": "                </table>"
+      },
+      "right": {
+        "number": 20,
+        "text": "                </table>"
+      }
+    },
+    {
+      "kind": "fold",
+      "hidden": 4
+    }
+  ]
+}

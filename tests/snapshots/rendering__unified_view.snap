@@ -1,0 +1,24 @@
+---
+source: tests/rendering.rs
+expression: "draw(&fixture(Some(3)), View::Unified, None, Wrap::Wrap)"
+---
+--- a/catalog.rs
++++ b/catalog.rs
+@@ -6,12 +6,15 @@
+             <div class="results">
+                 <table>
+                     <thead>
+-                        <tr><th>"Name"</th><th>"System"</th></tr>
++                        <tr><th>"Name"</th><th>"Lifecycle"</th></tr>
+                     </thead>
+                     <tbody>
+                         {move || {
+                             let rows = rows();
++                            let columns = Columns::for_entities(&rows);
+-                            rows.into_iter().map(entity_row).collect_view()
++                            rows.into_iter()
++                                .map(|entity| entity_row(entity, columns))
++                                .collect_view()
+                         }}
+                     </tbody>
+                 </table>

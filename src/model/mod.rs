@@ -2,9 +2,13 @@
 //!
 //! Pure data. No I/O, no terminal, no colour — serde-serializable end to end,
 //! because `--format json` is this module's `Display`.
-//!
-//! Phase 1 fills this in: `file` (source text, line index, encoding and EOL
-//! handling), `change` (`Equal` / `Added` / `Removed` / `Modified` with inline
-//! spans, grouped into blocks) and `row` (a display row holding at most one
-//! left line and at most one right line, which is how the two panes stay
-//! aligned).
+
+pub mod change;
+pub mod document;
+pub mod file;
+pub mod row;
+
+pub use change::{Line, Span};
+pub use document::{DiffDocument, FileMeta, Stats};
+pub use file::{Eol, SourceFile};
+pub use row::{Row, RowKind};
