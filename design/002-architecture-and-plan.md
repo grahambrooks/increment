@@ -152,13 +152,36 @@ Decisions taken during the work:
   `model` may not know about colour. `Highlighting::of(&old, &new)` is built at the call site and
   handed to the renderer.
 
-### Phase 3 — Git integration
+### Phase 3 — Git integration — **done (2026-08-26)**
 `source::git` via `gix` (worktree/index/revision, `HEAD~1..HEAD`, path filters); `source::patch`
 pager mode for `core.pager` compatibility, documented as reduced-fidelity; `git difftool` setup
 instructions.
 
 **Done when:** `gdiff git`, `gdiff git <rev>` and `git diff | gdiff --patch` all render, and the
-README documents both the pager and difftool configurations.
+README documents both the pager and difftool configurations. *All met.* Open question 3 is
+answered by shipping the pager mode with its limits stated in both the README and the module.
+
+What the work turned up:
+
+- **The racy-index problem is real and had to be handled.** Comparing a revision against the
+  working tree uses the index's stat data to avoid reading every tracked file — git's own
+  optimisation. But an entry written in the same second as the index, at the same byte length, is
+  indistinguishable from an untouched one by stat alone. Trusting it there makes an ordinary edit
+  *silently invisible*: no output, exit 0, as though the file were clean. `Stat::is_racy` settles
+  it, and a test pins the case. Three integration tests failed on this before it was fixed.
+- **Git is the oracle for the git tests.** They build fixture repositories with the `git` binary
+  and assert gdiff selects the same paths `git diff --name-only` does. The claim worth testing is
+  not that the code runs but that it agrees with git. Note the asymmetry: git is a *test*
+  dependency only — the product reads the repository in process via `gix`.
+- **Binary files are named, never dropped.** `Binary file b/logo.png differs`, and they count
+  towards the exit code. A diff tool that silently omits a change is lying by omission.
+- **Every source produces the same shape** (`Changes`), so renderers never learn where a diff
+  came from. The patch source is the exception that proves it: it produces *documents* rather
+  than file pairs, because it never had the files — which is also why it cannot be syntax
+  highlighted from source.
+- **`gix` needed `sha1` naming explicitly.** Without it the build fails inside `gix-hash` with a
+  `compile_error!`. Features chosen: `basic,revision,status,blob-diff,index,sha1`, no defaults —
+  `cargo tree` confirms no C dependency (`zlib-rs` is a Rust implementation).
 
 ### Phase 4 — TUI browser
 `ratatui`: changed-file list, synchronised split panes, next/previous change navigation, fold
@@ -200,6 +223,8 @@ formula works on this machine.
    in the following release, or should phase 3 land before the first tag?
 2. ~~**The change map** — right-edge minimap column in stdout mode too, or TUI only?~~
    **Answered during phase 2: TUI only.** In a pager it restates the gutter.
-3. **Pager mode** — worth shipping given it structurally cannot do folding or the change map, or
-   skip it and stand on `git difftool` plus `gdiff git`?
+3. ~~**Pager mode** — worth shipping given it structurally cannot do folding or the change map,
+   or skip it and stand on `git difftool` plus `gdiff git`?~~ **Answered in phase 3: shipped,
+   with its limits stated where someone configuring it will read them.** It re-diffs each hunk,
+   so the pairing and emphasis are still gdiff's.
 4. **Structural diff** — a real goal for this project, or explicitly ceded to difftastic?

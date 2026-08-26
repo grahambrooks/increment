@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::diff;
 use crate::render;
@@ -17,70 +17,118 @@ use super::surface;
     version,
     about = "The aligned side-by-side diff view, in the terminal.",
     long_about = None,
+    args_conflicts_with_subcommands = true,
 )]
 pub struct Args {
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
     /// The left-hand side.
-    pub old: PathBuf,
+    pub old: Option<PathBuf>,
 
     /// The right-hand side.
-    pub new: PathBuf,
+    pub new: Option<PathBuf>,
+
+    /// Read a unified diff from standard input instead of comparing files.
+    ///
+    /// For use as a git pager. Lower fidelity than `gdiff git`: a patch only
+    /// carries the context git chose to print.
+    #[arg(long, short = 'p', conflicts_with_all = ["old", "new"])]
+    pub patch: bool,
 
     /// Output surface. `auto` never selects `tui` — see the design.
-    #[arg(long, value_enum, default_value_t = Ui::Auto)]
+    #[arg(long, value_enum, default_value_t = Ui::Auto, global = true)]
     pub ui: Ui,
 
     /// Output format.
-    #[arg(long, value_enum, default_value_t = Format::Text)]
+    #[arg(long, value_enum, default_value_t = Format::Text, global = true)]
     pub format: Format,
 
     /// Which view to draw. `auto` splits where the terminal is wide enough.
-    #[arg(long, value_enum, default_value_t = View::Auto)]
+    #[arg(long, value_enum, default_value_t = View::Auto, global = true)]
     pub view: View,
 
     /// Edit script to compute.
-    #[arg(long, value_enum, default_value_t = Algorithm::Histogram)]
+    #[arg(long, value_enum, default_value_t = Algorithm::Histogram, global = true)]
     pub algorithm: Algorithm,
 
     /// Unchanged lines to keep either side of a change.
-    #[arg(short = 'U', long, default_value_t = 3, value_name = "LINES")]
+    #[arg(
+        short = 'U',
+        long,
+        default_value_t = 3,
+        value_name = "LINES",
+        global = true
+    )]
     pub context: usize,
 
     /// Show every unchanged line instead of folding.
-    #[arg(long, conflicts_with = "context")]
+    #[arg(long, conflicts_with = "context", global = true)]
     pub full: bool,
 
     /// What to do with a line too wide for its pane.
-    #[arg(long, value_enum, default_value_t = WrapMode::Wrap)]
+    #[arg(long, value_enum, default_value_t = WrapMode::Wrap, global = true)]
     pub wrap: WrapMode,
 
     /// Columns a tab advances to.
-    #[arg(long, default_value_t = 4, value_name = "COLUMNS")]
+    #[arg(long, default_value_t = 4, value_name = "COLUMNS", global = true)]
     pub tab_width: usize,
 
     /// Colour palette.
-    #[arg(long, value_enum, default_value_t = Theme::Auto)]
+    #[arg(long, value_enum, default_value_t = Theme::Auto, global = true)]
     pub theme: Theme,
 
     /// When to emit colour.
-    #[arg(long, value_enum, default_value_t = Color::Auto)]
+    #[arg(long, value_enum, default_value_t = Color::Auto, global = true)]
     pub color: Color,
 
     /// Override the detected terminal width.
-    #[arg(long, value_name = "COLUMNS")]
+    #[arg(long, value_name = "COLUMNS", global = true)]
     pub width: Option<usize>,
 
     /// Narrower than this, the split view gives way to the unified one.
-    #[arg(long, default_value_t = 120, value_name = "COLUMNS")]
+    #[arg(long, default_value_t = 120, value_name = "COLUMNS", global = true)]
     pub min_split_width: usize,
 
     /// Hide the line numbers in the centre gutter.
-    #[arg(long)]
+    #[arg(long, global = true)]
     pub no_line_numbers: bool,
 
     /// Syntax highlighting. `auto` enables it only where the palette leaves
     /// the foreground free.
-    #[arg(long, value_enum, default_value_t = Syntax::Auto)]
+    #[arg(long, value_enum, default_value_t = Syntax::Auto, global = true)]
     pub syntax: Syntax,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Compare against git: a revision, a range, or the working tree.
+    ///
+    /// With no revision, compares `HEAD` against the working tree. With one,
+    /// that revision against the working tree. With `a..b`, one revision
+    /// against the other.
+    Git {
+        /// `HEAD`, `main`, `HEAD~2..HEAD`, …
+        rev: Option<String>,
+
+        /// Limit to these paths.
+        #[arg(last = false)]
+        paths: Vec<PathBuf>,
+    },
+}
+
+/// What the arguments add up to.
+#[derive(Debug)]
+pub enum Source<'a> {
+    Files {
+        old: &'a PathBuf,
+        new: &'a PathBuf,
+    },
+    Git {
+        rev: Option<&'a str>,
+        paths: &'a [PathBuf],
+    },
+    Patch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -138,6 +186,25 @@ pub enum Syntax {
 }
 
 impl Args {
+    /// Work out what was asked for.
+    ///
+    /// `Err` carries the message for the one case clap cannot express: the bare
+    /// form needs *both* paths, and clap will happily accept one.
+    pub fn source(&self) -> Result<Source<'_>, &'static str> {
+        match (&self.command, self.patch, &self.old, &self.new) {
+            (Some(Command::Git { rev, paths }), ..) => Ok(Source::Git {
+                rev: rev.as_deref(),
+                paths,
+            }),
+            (None, true, ..) => Ok(Source::Patch),
+            (None, false, Some(old), Some(new)) => Ok(Source::Files { old, new }),
+            (None, false, Some(_), None) => Err("expected two files to compare, got one"),
+            (None, false, None, _) => {
+                Err("nothing to compare: give two files, `gdiff git`, or `--patch`")
+            }
+        }
+    }
+
     pub fn diff_options(&self) -> diff::Options {
         diff::Options {
             algorithm: match self.algorithm {
@@ -218,6 +285,10 @@ mod tests {
         Args::try_parse_from([&["gdiff"], args, &["a.rs", "b.rs"]].concat()).expect("parses")
     }
 
+    fn parse_bare(args: &[&str]) -> Args {
+        Args::try_parse_from([&["gdiff"], args].concat()).expect("parses")
+    }
+
     #[test]
     fn the_cli_definition_is_valid() {
         // clap's own assertions catch conflicting flags and bad defaults, and
@@ -252,6 +323,54 @@ mod tests {
     #[test]
     fn the_detected_width_is_used_when_none_is_given() {
         assert_eq!(parse(&[]).render_options(Some(80)).width, Some(80));
+    }
+
+    #[test]
+    fn two_paths_are_a_file_comparison() {
+        let args = parse_bare(&["old.rs", "new.rs"]);
+        assert!(matches!(args.source(), Ok(Source::Files { .. })));
+    }
+
+    #[test]
+    fn one_path_is_an_error_rather_than_a_diff_against_nothing() {
+        let args = parse_bare(&["only.rs"]);
+        assert!(args.source().is_err(), "{:?}", args.source());
+    }
+
+    #[test]
+    fn no_arguments_at_all_says_what_the_options_are() {
+        let args = parse_bare(&[]);
+        let message = args.source().expect_err("should not resolve");
+        assert!(message.contains("git"), "{message}");
+        assert!(message.contains("--patch"), "{message}");
+    }
+
+    #[test]
+    fn the_git_subcommand_carries_its_revision_and_paths() {
+        let args = parse_bare(&["git", "HEAD~1..HEAD", "src", "tests"]);
+        match args.source().expect("resolves") {
+            Source::Git { rev, paths } => {
+                assert_eq!(rev, Some("HEAD~1..HEAD"));
+                assert_eq!(paths.len(), 2);
+            }
+            other => panic!("expected a git source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn git_with_no_revision_is_still_a_git_source() {
+        let args = parse_bare(&["git"]);
+        assert!(matches!(args.source(), Ok(Source::Git { rev: None, .. })));
+    }
+
+    #[test]
+    fn patch_reads_from_stdin_and_takes_no_paths() {
+        assert!(matches!(
+            parse_bare(&["--patch"]).source(),
+            Ok(Source::Patch)
+        ));
+        // Giving it files as well is a contradiction, and clap should say so.
+        assert!(Args::try_parse_from(["gdiff", "--patch", "a.rs", "b.rs"]).is_err());
     }
 
     #[test]

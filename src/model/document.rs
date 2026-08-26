@@ -45,8 +45,27 @@ pub struct DiffDocument {
     pub rows: Vec<Row>,
 }
 
+impl FileMeta {
+    pub fn new(name: impl Into<String>, lines: usize) -> Self {
+        Self {
+            name: name.into(),
+            lines,
+            missing_final_newline: false,
+        }
+    }
+}
+
 impl DiffDocument {
     pub fn new(old: &SourceFile, new: &SourceFile, rows: Vec<Row>) -> Self {
+        Self::from_meta(old.into(), new.into(), rows)
+    }
+
+    /// Build from metadata rather than from the files themselves.
+    ///
+    /// For sources that never hold a whole file: a patch on stdin describes
+    /// only the slices git chose to emit, so there is no `SourceFile` to
+    /// summarise.
+    pub fn from_meta(old: FileMeta, new: FileMeta, rows: Vec<Row>) -> Self {
         let stats = rows.iter().fold(Stats::default(), |mut stats, row| {
             match row.kind {
                 RowKind::Added => stats.added += 1,
@@ -64,8 +83,8 @@ impl DiffDocument {
         });
 
         Self {
-            old: old.into(),
-            new: new.into(),
+            old,
+            new,
             stats,
             rows,
         }

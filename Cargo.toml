@@ -52,6 +52,7 @@ cli = ["dep:clap"]
 anstream = "1"
 anstyle = "1"
 clap = { version = "4", features = ["derive"], optional = true }
+gix = { version = "0.87.1", default-features = false, features = ["basic", "revision", "status", "blob-diff", "index", "sha1"] }
 imara-diff = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

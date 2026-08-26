@@ -10,17 +10,53 @@ right edge — the JetBrains diff view, in a terminal, in a pipe.
 
 ## Status
 
-**Phases 0–2 done.** gdiff diffs two files and renders them side by side, with
-alignment, word-level highlighting, folding, syntax colour and a JSON format.
-Git integration (phase 3) and the interactive browser (phase 4) are next; the
-per-phase criteria are in
+**Phases 0–3 done.** gdiff diffs files or a git repository and renders them
+side by side, with alignment, word-level highlighting, folding, syntax colour
+and a JSON format. The interactive browser (phase 4) is next; the per-phase
+criteria are in
 [`design/002-architecture-and-plan.md`](design/002-architecture-and-plan.md).
 
 ```sh
-gdiff old.rs new.rs              # split where the terminal is wide enough
-gdiff --view unified old.rs new.rs
+gdiff old.rs new.rs              # two files; splits if the terminal is wide enough
+gdiff git                        # HEAD against the working tree
+gdiff git HEAD~2                 # a revision against the working tree
+gdiff git main..feature          # one revision against another
+gdiff git HEAD~1..HEAD src       # …restricted to a path
 gdiff --format json old.rs new.rs
 ```
+
+Exit codes follow `diff(1)`, so `gdiff git` in a script says whether anything
+changed.
+
+## Git
+
+gdiff reads the repository directly, in process — it never shells out to `git`,
+and there is no runtime dependency on it.
+
+### As a difftool
+
+```sh
+git config --global difftool.gdiff.cmd 'gdiff "$LOCAL" "$REMOTE"'
+git config --global difftool.prompt false
+git difftool -y HEAD~1
+```
+
+### As a pager
+
+```sh
+git config --global core.pager 'gdiff --patch'
+```
+
+**This path is deliberately lower fidelity, and it is worth knowing why.** A
+pager is handed the diff git already decided to print — a few lines of context
+around each change and nothing else. The files themselves are not available, so
+there is no whole-file view, nothing to fold that git has not already folded,
+and no way to re-diff a region with different settings. gdiff still re-diffs
+each hunk, so the pairing and the word-level highlighting are its own, and it
+marks the gaps between hunks with what the hunk headers imply.
+
+Where the choice exists, `gdiff git` is the better path: it reads both sides in
+full.
 
 | Flag | |
 |---|---|
@@ -32,6 +68,7 @@ gdiff --format json old.rs new.rs
 | `--syntax auto\|on\|off` | `auto` highlights only where the palette leaves the foreground free |
 | `--color auto\|always\|never` | colour strips itself when piped regardless |
 | `--algorithm histogram\|myers` | |
+| `--patch`, `-p` | read a unified diff from stdin instead of comparing files |
 | `--width N`, `--min-split-width N` | |
 
 ## Why another diff tool
