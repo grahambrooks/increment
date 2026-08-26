@@ -1,0 +1,20 @@
+---
+source: tests/tui_layout.rs
+expression: "draw(&mut app, 100, 16)"
+---
+┌ b/only.rs ──────────────────────────────────────────────────────────────────────────────────────┐│
+│let line1 = 1;                             │  1    1 │let line1 = 1;                             ││
+│let line2 = 2;                             │  2    2 │let line2 = 2;                             ││
+│let line3 = 3;                             │  3    3 │let line3 = 3;                             ││
+│let line4 = 4;                             │  4    4 │let line4 = 4;                             │▐
+│let line5 = 5;                             │  5 ~  5 │let line5 = 500;                           ││
+│let line6 = 6;                             │  6    6 │let line6 = 6;                             ││
+│let line7 = 7;                             │  7    7 │let line7 = 7;                             │╌
+│let line8 = 8;                             │  8    8 │let line8 = 8;                             ││
+│───────────────────────────────────── ⋯ 23 unchanged lines ──────────────────────────────────────││
+│let line32 = 32;                           │ 32   32 │let line32 = 32;                           ││
+│let line33 = 33;                           │ 33   33 │let line33 = 33;                           │▐
+│let line34 = 34;                           │ 34   34 │let line34 = 34;                           ││
+│let line35 = 35;                           │ 35 ~ 35 │let line35 = 3500;                         ││
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘╌
+/line35▏

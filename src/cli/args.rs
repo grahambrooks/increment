@@ -17,7 +17,6 @@ use super::surface;
     version,
     about = "The aligned side-by-side diff view, in the terminal.",
     long_about = None,
-    args_conflicts_with_subcommands = true,
 )]
 pub struct Args {
     #[command(subcommand)]
@@ -354,6 +353,25 @@ mod tests {
                 assert_eq!(paths.len(), 2);
             }
             other => panic!("expected a git source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn options_may_come_before_the_subcommand() {
+        // `gdiff --ui tui git` must not be read as the two-file form with `git`
+        // as the first path.
+        for args in [
+            vec!["git", "--view", "unified"],
+            vec!["--view", "unified", "git"],
+            vec!["--ui", "tui", "git", "HEAD~1..HEAD"],
+        ] {
+            let parsed = Args::try_parse_from([vec!["gdiff"], args.clone()].concat())
+                .unwrap_or_else(|error| panic!("{args:?} should parse: {error}"));
+            assert!(
+                matches!(parsed.source(), Ok(Source::Git { .. })),
+                "{args:?} resolved to {:?}",
+                parsed.source()
+            );
         }
     }
 

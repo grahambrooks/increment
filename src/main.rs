@@ -14,6 +14,7 @@ use gdiff::cli::surface;
 use gdiff::highlight::Highlighting;
 use gdiff::model::DiffDocument;
 use gdiff::source::{self, Changes, Comparison};
+use gdiff::tui;
 use gdiff::{diff, exit, render};
 
 fn main() -> ExitCode {
@@ -34,12 +35,6 @@ fn run(args: &Args) -> Result<i32, String> {
     let surface = surface::resolve(args.ui.into(), std::io::stdout().is_terminal())
         .map_err(|error| error.to_string())?;
 
-    if surface == surface::Surface::Tui {
-        return Err("the interactive browser is not implemented yet (phase 4). \
-             Drop `--ui tui` for the side-by-side view."
-            .to_owned());
-    }
-
     let diff_options = args.diff_options();
     let changes = read(args, &diff_options)?;
 
@@ -57,8 +52,12 @@ fn run(args: &Args) -> Result<i32, String> {
         .chain(changes.documents.iter().map(|d| (d.clone(), None)))
         .collect();
 
-    let mut out = anstream::AutoStream::new(std::io::stdout().lock(), args.color_choice());
-    let changed = write(args, &documents, &changes, &mut out)?;
+    let changed = if surface == surface::Surface::Tui {
+        browse(args, &documents, &changes)?
+    } else {
+        let mut out = anstream::AutoStream::new(std::io::stdout().lock(), args.color_choice());
+        write(args, &documents, &changes, &mut out)?
+    };
 
     Ok(if changed {
         exit::DIFFERENCES
@@ -81,6 +80,53 @@ fn read(args: &Args, diff_options: &diff::Options) -> Result<Changes, String> {
                 .map_err(|error| format!("reading the patch: {error}"))
         }
     }
+}
+
+/// Hand the documents to the interactive browser.
+///
+/// Binary changes are reported after it exits rather than inside it: the
+/// browser has nothing to show for them, and swallowing them would be the same
+/// lie by omission as dropping them from the stream.
+fn browse(
+    args: &Args,
+    documents: &[(DiffDocument, Option<&Comparison>)],
+    changes: &Changes,
+) -> Result<bool, String> {
+    let options = args.render_options(terminal_width());
+    let entries: Vec<tui::Entry> = documents
+        .iter()
+        .filter(|(document, _)| document.has_changes())
+        .map(|(document, pair)| tui::Entry {
+            document: document.clone(),
+            // Unfolding needs the sources. A patch never had them, so the
+            // browser says so rather than offering a key that does nothing.
+            unfolded: pair.map(|pair| {
+                diff::compare(
+                    &pair.old,
+                    &pair.new,
+                    &diff::Options {
+                        context: None,
+                        ..args.diff_options()
+                    },
+                )
+            }),
+            highlighting: match pair {
+                Some(pair) if args.syntax_enabled(&options.theme) => {
+                    Highlighting::of(&pair.old, &pair.new)
+                }
+                _ => Highlighting::none(),
+            },
+        })
+        .collect();
+
+    let changed = !entries.is_empty() || !changes.binary.is_empty();
+    tui::run(entries, options).map_err(|error| error.to_string())?;
+
+    for name in &changes.binary {
+        println!("Binary file {name} differs");
+    }
+
+    Ok(changed)
 }
 
 /// Draw every document, and report whether anything differed.

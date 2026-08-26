@@ -17,9 +17,13 @@
 //! - **Column arithmetic.** Widths come from [`super::width`], never from
 //!   `str::len`.
 //!
-//! The change map from the reference is deliberately *not* here — see the note
-//! in `design/002-architecture-and-plan.md` §4. In a scrolling pager it would
-//! restate the marker column; it earns its place in the interactive browser.
+//! # Layout is computed, not written
+//!
+//! [`compose`] turns a document into styled [`VisualRow`]s and touches no I/O.
+//! [`render`] serialises those rows to a writer, and the interactive browser
+//! draws the very same rows into a terminal buffer. That split is what stops
+//! the two surfaces from drifting: there is one implementation of "what does
+//! this diff look like", and two ways of putting it on a screen.
 
 use std::io::Write;
 
@@ -34,47 +38,79 @@ use super::unified::{with_syntax, write_styled};
 use super::width::{Piece, lay_out, width};
 
 /// Between a pane and the gutter.
-const SEPARATOR: char = '│';
+pub const SEPARATOR: char = '│';
 
-pub fn render(
+/// A run of text and the style it draws with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cell {
+    pub text: String,
+    pub style: Style,
+}
+
+impl Cell {
+    fn new(text: impl Into<String>, style: Style) -> Self {
+        Self {
+            text: text.into(),
+            style,
+        }
+    }
+}
+
+/// One drawn line of the split view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VisualRow {
+    pub cells: Vec<Cell>,
+    /// Which row of the document this was drawn from.
+    ///
+    /// Several visual rows can share one document row when a line wraps, which
+    /// is why the interactive browser needs this to map a screen position back
+    /// to a change.
+    pub source: usize,
+    /// Whether this is the first visual row of that document row — the one
+    /// carrying the line numbers.
+    pub first: bool,
+}
+
+/// The summary line: what was compared, and how much changed.
+pub fn header(document: &DiffDocument, options: &Options) -> Vec<Cell> {
+    let theme = &options.theme;
+    let stats = document.stats;
+    vec![
+        Cell::new(
+            format!("{} → {}", document.old.name, document.new.name),
+            theme.header,
+        ),
+        Cell::new("  ", Style::new()),
+        Cell::new(format!("+{}", stats.added), theme.added),
+        Cell::new(" ", Style::new()),
+        Cell::new(format!("-{}", stats.removed), theme.removed),
+        Cell::new(" ", Style::new()),
+        Cell::new(format!("~{}", stats.modified), theme.modified),
+    ]
+}
+
+/// Lay a document out into styled visual rows. No I/O, no terminal.
+pub fn compose(
     document: &DiffDocument,
     highlighting: &Highlighting,
     options: &Options,
-    out: &mut impl Write,
-) -> std::io::Result<()> {
-    if !document.has_changes() {
-        return Ok(());
-    }
-
+) -> Vec<VisualRow> {
     let theme = &options.theme;
     let total = options.width.unwrap_or(options.min_split_width);
     let geometry = Geometry::new(document, options, total);
+    let mut out = Vec::new();
 
-    header(document, options, out)?;
-
-    for row in &document.rows {
+    for (index, row) in document.rows.iter().enumerate() {
         if let RowKind::Fold { hidden } = row.kind {
-            let text = format!(
-                " {} {hidden} unchanged line{} ",
-                marker::FOLD,
-                if hidden == 1 { "" } else { "s" }
-            );
-            // Split the remainder rather than halving it twice: an odd
-            // number of columns left over would otherwise leave the fold row
-            // one column short of every other row.
-            let remaining = total.saturating_sub(width(&text));
-            let (before, after) = (remaining / 2, remaining - remaining / 2);
-            write_styled(
-                out,
-                theme.fold,
-                &format!("{}{text}{}", "─".repeat(before), "─".repeat(after)),
-            )?;
-            writeln!(out)?;
+            out.push(VisualRow {
+                cells: vec![Cell::new(fold_text(hidden, total), theme.fold)],
+                source: index,
+                first: true,
+            });
             continue;
         }
 
         let styles = RowStyles::of(&row.kind, theme);
-
         let left = visual(
             row.left.as_ref(),
             |number| highlighting.old_line(number),
@@ -89,10 +125,10 @@ pub fn render(
         );
         let height = left.len().max(right.len()).max(1);
 
-        for index in 0..height {
+        for visual_index in 0..height {
             // Only the first visual row carries numbers; the marker repeats, so
             // a wrapped removal still reads as a removal all the way down.
-            let numbers = if index == 0 {
+            let numbers = if visual_index == 0 {
                 (
                     row.left.as_ref().map(|line| line.number),
                     row.right.as_ref().map(|line| line.number),
@@ -101,38 +137,80 @@ pub fn render(
                 (None, None)
             };
 
-            let left_cell = Cell {
-                pieces: left.get(index),
-                present: row.left.is_some(),
-                style: styles.left,
-                emphasis: styles.left_emphasis,
-                filler: theme.filler,
-                width: geometry.left,
-            };
-            let right_cell = Cell {
-                pieces: right.get(index),
-                present: row.right.is_some(),
-                style: styles.right,
-                emphasis: styles.right_emphasis,
-                filler: theme.filler,
-                width: geometry.right,
-            };
+            let mut cells = Vec::new();
+            pane(
+                &mut cells,
+                &PaneCell {
+                    pieces: left.get(visual_index),
+                    present: row.left.is_some(),
+                    style: styles.left,
+                    emphasis: styles.left_emphasis,
+                    filler: theme.filler,
+                    width: geometry.left,
+                },
+            );
+            gutter(&mut cells, options, &geometry, numbers, &styles);
+            pane(
+                &mut cells,
+                &PaneCell {
+                    pieces: right.get(visual_index),
+                    present: row.right.is_some(),
+                    style: styles.right,
+                    emphasis: styles.right_emphasis,
+                    filler: theme.filler,
+                    width: geometry.right,
+                },
+            );
 
-            pane(out, &left_cell)?;
-            gutter(
-                out,
-                options,
-                &geometry,
-                numbers,
-                styles.glyph,
-                styles.marker,
-            )?;
-            pane(out, &right_cell)?;
-            writeln!(out)?;
+            out.push(VisualRow {
+                cells,
+                source: index,
+                first: visual_index == 0,
+            });
         }
     }
 
+    out
+}
+
+/// Draw a document to a writer.
+pub fn render(
+    document: &DiffDocument,
+    highlighting: &Highlighting,
+    options: &Options,
+    out: &mut impl Write,
+) -> std::io::Result<()> {
+    if !document.has_changes() {
+        return Ok(());
+    }
+
+    for cell in header(document, options) {
+        write_styled(out, cell.style, &cell.text)?;
+    }
+    writeln!(out)?;
+
+    for row in compose(document, highlighting, options) {
+        for cell in &row.cells {
+            write_styled(out, cell.style, &cell.text)?;
+        }
+        writeln!(out)?;
+    }
+
     Ok(())
+}
+
+fn fold_text(hidden: usize, total: usize) -> String {
+    let text = format!(
+        " {} {hidden} unchanged line{} ",
+        marker::FOLD,
+        if hidden == 1 { "" } else { "s" }
+    );
+    // Split the remainder rather than halving it twice: an odd number of
+    // columns left over would otherwise leave the fold row one column short of
+    // every other row.
+    let remaining = total.saturating_sub(width(&text));
+    let (before, after) = (remaining / 2, remaining - remaining / 2);
+    format!("{}{text}{}", "─".repeat(before), "─".repeat(after))
 }
 
 /// The styles one row draws with.
@@ -246,7 +324,7 @@ fn visual<'a>(
 }
 
 /// One pane's worth of one visual row.
-struct Cell<'a> {
+struct PaneCell<'a> {
     pieces: Option<&'a Vec<Piece>>,
     /// Whether this side has a line at all, as opposed to having run out of
     /// visual rows because the other side wrapped further.
@@ -257,8 +335,8 @@ struct Cell<'a> {
     width: usize,
 }
 
-/// Write one pane cell, padded to its width.
-fn pane(out: &mut impl Write, cell: &Cell<'_>) -> std::io::Result<()> {
+/// Append one pane cell, padded to its width.
+fn pane(out: &mut Vec<Cell>, cell: &PaneCell<'_>) {
     // No line on this side at all: paint the void so it reads as absence rather
     // than as the end of the file.
     let Some(pieces) = cell.pieces else {
@@ -267,7 +345,8 @@ fn pane(out: &mut impl Write, cell: &Cell<'_>) -> std::io::Result<()> {
         } else {
             cell.filler
         };
-        return write_styled(out, style, &" ".repeat(cell.width));
+        out.push(Cell::new(" ".repeat(cell.width), style));
+        return;
     };
 
     let mut used = 0usize;
@@ -277,27 +356,25 @@ fn pane(out: &mut impl Write, cell: &Cell<'_>) -> std::io::Result<()> {
         } else {
             cell.style
         };
-        write_styled(out, with_syntax(base, piece), &piece.text)?;
+        out.push(Cell::new(piece.text.clone(), with_syntax(base, piece)));
         used += width(&piece.text);
     }
 
-    write_styled(
-        out,
+    out.push(Cell::new(
+        " ".repeat(cell.width.saturating_sub(used)),
         cell.style,
-        &" ".repeat(cell.width.saturating_sub(used)),
-    )
+    ));
 }
 
 fn gutter(
-    out: &mut impl Write,
+    out: &mut Vec<Cell>,
     options: &Options,
     geometry: &Geometry,
     numbers: (Option<usize>, Option<usize>),
-    glyph: char,
-    row_style: Style,
-) -> std::io::Result<()> {
+    styles: &RowStyles,
+) {
     let theme = &options.theme;
-    write_styled(out, theme.separator, &SEPARATOR.to_string())?;
+    out.push(Cell::new(SEPARATOR.to_string(), theme.separator));
 
     match geometry.numbers {
         Some(number_width) => {
@@ -305,33 +382,16 @@ fn gutter(
                 Some(number) => format!("{number:>number_width$}"),
                 None => " ".repeat(number_width),
             };
-            write_styled(out, theme.gutter, &format!(" {} ", render(numbers.0)))?;
-            write_styled(out, row_style, &glyph.to_string())?;
-            write_styled(out, theme.gutter, &format!(" {} ", render(numbers.1)))?;
+            out.push(Cell::new(format!(" {} ", render(numbers.0)), theme.gutter));
+            out.push(Cell::new(styles.glyph.to_string(), styles.marker));
+            out.push(Cell::new(format!(" {} ", render(numbers.1)), theme.gutter));
         }
         None => {
-            write_styled(out, row_style, &format!(" {glyph} "))?;
+            out.push(Cell::new(format!(" {} ", styles.glyph), styles.marker));
         }
     }
 
-    write_styled(out, theme.separator, &SEPARATOR.to_string())
-}
-
-fn header(document: &DiffDocument, options: &Options, out: &mut impl Write) -> std::io::Result<()> {
-    let theme = &options.theme;
-    let stats = document.stats;
-    write_styled(
-        out,
-        theme.header,
-        &format!("{} → {}", document.old.name, document.new.name),
-    )?;
-    write!(out, "  ")?;
-    write_styled(out, theme.added, &format!("+{}", stats.added))?;
-    write!(out, " ")?;
-    write_styled(out, theme.removed, &format!("-{}", stats.removed))?;
-    write!(out, " ")?;
-    write_styled(out, theme.modified, &format!("~{}", stats.modified))?;
-    writeln!(out)
+    out.push(Cell::new(SEPARATOR.to_string(), theme.separator));
 }
 
 #[cfg(test)]

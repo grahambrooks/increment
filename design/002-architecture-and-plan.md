@@ -183,13 +183,33 @@ What the work turned up:
   `compile_error!`. Features chosen: `basic,revision,status,blob-diff,index,sha1`, no defaults —
   `cargo tree` confirms no C dependency (`zlib-rs` is a Rust implementation).
 
-### Phase 4 — TUI browser
-`ratatui`: changed-file list, synchronised split panes, next/previous change navigation, fold
-toggle, search, the change map as a scrollbar.
+### Phase 4 — TUI browser — **done (2026-08-26)**
+`ratatui`: changed-file list, split panes, next/previous change navigation, fold toggle, search,
+and the change map — the piece deferred from phase 2, which earns its column here because only
+part of the file is on screen.
 
 **Done when:** the navigation state machine has unit tests with no terminal; layout has
 `TestBackend` snapshots; `--ui auto` never resolves to `tui`; redirecting the TUI exits 2 with a
-message; both renderers are driven from one shared fixture document.
+message; both renderers are driven from one shared fixture document. *All met* — and the last
+one more strongly than asked: `render::split` was split into `compose` (layout, no I/O) and
+`render` (serialisation), so the browser and the pager call the *same* layout function rather
+than merely sharing a fixture. A test asserts their rows are identical.
+
+Three bugs the work turned up, all of them navigation:
+
+- **A jump near the end of a file appeared to stick.** The scroll clamps — there is nothing below
+  the last screenful to show — so jumping to the final change leaves the scroll short of it.
+  Searching for the *next* change from the scroll then found that same change again, and `n` did
+  nothing. Fixed by tracking an anchor separate from the scroll: jumps count from where the
+  reader was sent, manual movement puts the anchor back under their control.
+- **`+0 -0` in the file list.** A file whose every change is an edit showed no additions and no
+  removals, which reads as "nothing happened here". The modified count is shown too.
+- **The change map marked everything.** The viewport indicator covered every cell when the file
+  fitted on screen, which says nothing. It only draws when there is somewhere else to be.
+
+And one interface wart: `gdiff --ui tui git` was read as the two-file form with `git` as the
+first path. `args_conflicts_with_subcommands` was the cause; without it clap resolves the
+subcommand from either position, and a test now covers both orders.
 
 ### Phase 5 — Semantics
 Block move detection (zebra tinting); opt-in `--structural` via tree-sitter, projected back onto

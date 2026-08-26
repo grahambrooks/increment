@@ -10,10 +10,10 @@ right edge — the JetBrains diff view, in a terminal, in a pipe.
 
 ## Status
 
-**Phases 0–3 done.** gdiff diffs files or a git repository and renders them
-side by side, with alignment, word-level highlighting, folding, syntax colour
-and a JSON format. The interactive browser (phase 4) is next; the per-phase
-criteria are in
+**Phases 0–4 done.** gdiff diffs files or a git repository and renders them
+side by side — as styled stdout, as JSON, or in an interactive browser — with
+alignment, word-level highlighting, folding and syntax colour. Move detection
+and optional structural diff (phase 5) are next; the per-phase criteria are in
 [`design/002-architecture-and-plan.md`](design/002-architecture-and-plan.md).
 
 ```sh
@@ -27,6 +27,32 @@ gdiff --format json old.rs new.rs
 
 Exit codes follow `diff(1)`, so `gdiff git` in a script says whether anything
 changed.
+
+## The browser
+
+```sh
+gdiff --ui tui git
+```
+
+A file list, the split view, and a change map down the right edge showing what
+changed across the whole file and where you are in it.
+
+| Key | |
+|---|---|
+| `j` `k`, `↓` `↑` | scroll |
+| `Ctrl-f` `Ctrl-b`, `PgDn` `PgUp` | page |
+| `g` `G`, `Home` `End` | top, bottom |
+| `n` `N` | next, previous change — or search match, when a search is active |
+| `]` `[` | next, previous file |
+| `f` | unfold, showing every line rather than the context |
+| `/` | search; `Enter` commits, `Esc` cancels |
+| `Tab` | move between the file list and the diff |
+| `q`, `Esc`, `Ctrl-c` | quit |
+
+The browser is always an explicit request. `--ui auto` never selects it: an
+alternate screen cannot be piped, redirected or read by CI, and `auto` is what
+CI hits. Redirecting it exits 2 with a message rather than writing escape codes
+into a file.
 
 ## Git
 
