@@ -1,0 +1,57 @@
+# gdiff — a single crate that is both a library and a binary.
+#
+# Not a workspace, deliberately: one manifest, no inter-crate version pinning,
+# and the subsystem boundaries (model, diff, render, source) are expressed as
+# directory modules instead. See design/002-architecture-and-plan.md §1.
+#
+# The library target exists so integration tests and, later, any embedder reach
+# the same code the CLI does — a binary's internals are not reachable from
+# `tests/`, and the alignment logic is the part that most needs testing.
+
+[package]
+name = "gdiff"
+# CalVer, YYYY.M.MICRO, committed rather than injected — MICRO counts the
+# releases already cut this month. The month carries no leading zero because
+# 2026.08.0 is not valid SemVer and cargo requires SemVer. Bump with
+# `make release`, never by hand.
+version = "2026.8.0"
+edition = "2024"
+license = "MIT"
+description = "A diff visualizer for the terminal: the aligned side-by-side view, as structured output."
+repository = "https://github.com/grahambrooks/gdiff"
+homepage = "https://github.com/grahambrooks/gdiff"
+keywords = ["diff", "git", "terminal", "tui", "side-by-side"]
+categories = ["command-line-utilities", "development-tools"]
+# Tracks latest stable, and is pinned a second time in rust-toolchain.toml so a
+# laptop, CI and a release runner all compile with the same compiler. Declaring
+# a floor nothing is tested at is worse than declaring an honest one.
+rust-version = "1.98.0"
+
+[lib]
+name = "gdiff"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gdiff"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+# Argument parsing and terminal handling. A consumer embedding the library gets
+# the model, diff and render core with neither.
+cli = ["dep:clap"]
+
+# Dependencies are added when the code that uses them is written, not ahead of
+# it — an unused dependency is a supply-chain liability and lockfile churn for
+# no benefit. The full intended set, and the reasoning behind each choice, is
+# design/002-architecture-and-plan.md §3. Phase 1 adds imara-diff; phase 2 adds
+# syntect (default-features = false, features = ["regex-fancy"], to keep the
+# onig C library out), two-face, anstream, unicode-width and unicode-segmentation.
+[dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
+
+
+[profile.dist]
+inherits = "release"
+lto = "thin"

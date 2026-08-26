@@ -1,0 +1,40 @@
+# The pre-commit gate.
+#
+# Two tiers, deliberately: formatting and lints are fast enough to run on every
+# commit, the test suite runs at push. Nothing unreliable goes in here — a
+# high-false-positive check is how the whole hook gets disabled permanently,
+# and then none of it runs.
+#
+# Install with `make hooks`.
+
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id = "cargo-fmt",
+    name = "cargo fmt",
+    entry = "cargo fmt --all --check",
+    language = "system",
+    types = ["rust"],
+    pass_filenames = false,
+  },
+  {
+    id = "cargo-clippy",
+    name = "cargo clippy",
+    entry = "cargo clippy --all-targets --all-features -- -D warnings",
+    language = "system",
+    types = ["rust"],
+    pass_filenames = false,
+    require_serial = true,
+  },
+  {
+    id = "cargo-test",
+    name = "cargo test",
+    entry = "cargo test --all-features",
+    language = "system",
+    types = ["rust"],
+    pass_filenames = false,
+    require_serial = true,
+    stages = ["pre-push"],
+  },
+]
