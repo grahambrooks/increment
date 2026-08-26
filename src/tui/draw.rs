@@ -65,11 +65,14 @@ fn draw_files(frame: &mut Frame<'_>, app: &App, area: Rect) {
             // All three counts, not just additions and removals. A file whose
             // every change is an edit would otherwise be listed as `+0 -0`,
             // which reads as "nothing happened here".
-            let counts = [
+            let mut counts = vec![
                 (format!("+{}", stats.added), Color::Green),
                 (format!("-{}", stats.removed), Color::Red),
                 (format!("~{}", stats.modified), Color::Blue),
             ];
+            if stats.moved > 0 {
+                counts.push((format!("⇄{}", stats.moved), Color::Yellow));
+            }
             let width_of_counts: usize = counts
                 .iter()
                 .map(|(text, _)| text.chars().count() + 1)
@@ -155,6 +158,7 @@ fn draw_map(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 Some(RowKind::Removed) => ('▐', Color::Red),
                 Some(RowKind::Modified) => ('▐', Color::Blue),
                 Some(RowKind::Replaced) => ('▐', Color::Magenta),
+                Some(RowKind::Moved { .. }) => ('▐', Color::Yellow),
                 Some(RowKind::Fold { .. }) => ('╌', Color::DarkGray),
                 _ => ('│', Color::DarkGray),
             };
@@ -177,6 +181,9 @@ fn weight(kind: &RowKind) -> u8 {
     match kind {
         RowKind::Equal => 0,
         RowKind::Fold { .. } => 1,
+        // Below a real addition or removal: a move is code the reader has
+        // already seen, and it should not outrank new code in the overview.
+        RowKind::Moved { .. } => 2,
         RowKind::Added | RowKind::Removed => 3,
         RowKind::Modified | RowKind::Replaced => 4,
     }
@@ -217,8 +224,13 @@ fn position(app: &App) -> String {
         return "no changes".to_owned();
     };
     let stats = document.stats;
+    let moved = if stats.moved > 0 {
+        format!("  ⇄{}", stats.moved)
+    } else {
+        String::new()
+    };
     format!(
-        "row {}/{}  {}{} {}{} {}{}",
+        "row {}/{}  {}{} {}{} {}{}{moved}",
         (app.scroll() + 1).min(total.max(1)),
         total,
         marker::ADDED,

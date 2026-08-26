@@ -211,12 +211,51 @@ And one interface wart: `gdiff --ui tui git` was read as the two-file form with 
 first path. `args_conflicts_with_subcommands` was the cause; without it clap resolves the
 subcommand from either position, and a test now covers both orders.
 
-### Phase 5 — Semantics
-Block move detection (zebra tinting); opt-in `--structural` via tree-sitter, projected back onto
-lines, only if it can respect the two-column layout; whitespace-change modes.
+### Phase 5 — Semantics — **done (2026-08-26), except structural diff, which is declined**
+Block move detection with alternating tints; whitespace-change modes.
 
 **Done when:** a commit that moves a function shows it as a move rather than delete+add, with a
-test asserting exactly that.
+test asserting exactly that. *Met* — and checked against git: on the same pure move,
+`git diff --color-moved=zebra` and gdiff mark the same four lines on each side.
+
+- **Move detection runs before alignment, not after.** Alignment pairs unmatched lines by
+  similarity, so by the time rows exist the moved block has already been paired off against
+  whatever happened to sit opposite it. Detection therefore consumes engine *blocks* and
+  alignment consults the result.
+- **A run must be substantial**: three lines and twenty non-whitespace characters. Without a
+  floor every `}` in the file "moves", and the marking is noise that buries the real ones.
+- **A moved block that was also edited is not claimed whole**, which matches git — only lines
+  that survived unchanged can be matched by content. Claiming the edited line too would hide a
+  real change inside something the reader has been told to skip.
+- **Within one file only.** A function moved to a *different* file is not detected, because each
+  comparison is diffed on its own. Catching it means a pass over the whole change set before any
+  of it is aligned — worth doing, not done here, and stated rather than implied.
+- **Whitespace modes normalise what is compared, never what is shown** (`-w`, `-b`). A line still
+  renders exactly as it is on disk; normalising for display would turn "your reformatting is
+  hidden" into "gdiff lied about the file".
+- **`+0 -0 ~0` was a bug.** A diff that is entirely a move reported no additions, no removals and
+  no edits, which reads as nothing having happened. Move counts now appear in the split header,
+  the browser's file list and its status line — the same failure the file list had in phase 4.
+
+#### Structural diff: declined, pending a decision
+
+**`--structural` via tree-sitter cannot be built without breaking the project's pure-Rust
+constraint.** tree-sitter's core is C (`lib.c`, `stack.c`, `lexer.c`) and every grammar ships
+`parser.c` and `scanner.c`; both compile through `cc`. Adding it makes `make pure-rust` fail by
+design, and puts a C toolchain in the path of every build on every platform.
+
+That is a constraint conflict, not a scheduling problem, so it is Graham's to resolve. The
+options, with a recommendation:
+
+1. **Cede structural diff to difftastic** *(recommended)*. It is the thing difftastic is
+   excellent at, gdiff's pitch is alignment rather than syntax-awareness, and the two compose
+   fine — `difft` for "what changed semantically", `gdiff` for "show me the two versions".
+2. Relax the constraint for an off-by-default cargo feature. Honest, but "pure Rust" stops being
+   true of the project and starts being true only of its default features.
+3. Wait for a pure-Rust parsing stack with comparable language coverage. Nothing today is close.
+
+This is [open question 4](#6-open-questions-for-graham), and answering it 1 would let that
+question be closed and the claim dropped from the design.
 
 ### Release
 CalVer (`2026.9.0`), GitHub Actions builds the binaries, Homebrew formula in this repo updated by
@@ -248,3 +287,6 @@ formula works on this machine.
    with its limits stated where someone configuring it will read them.** It re-diffs each hunk,
    so the pairing and emphasis are still gdiff's.
 4. **Structural diff** — a real goal for this project, or explicitly ceded to difftastic?
+   **Phase 5 found this is a constraint conflict**: tree-sitter is C, so it cannot be added
+   without breaking "pure Rust, no C toolchain". See the phase 5 note above. Recommendation:
+   cede it.

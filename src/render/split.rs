@@ -75,7 +75,7 @@ pub struct VisualRow {
 pub fn header(document: &DiffDocument, options: &Options) -> Vec<Cell> {
     let theme = &options.theme;
     let stats = document.stats;
-    vec![
+    let mut cells = vec![
         Cell::new(
             format!("{} → {}", document.old.name, document.new.name),
             theme.header,
@@ -86,7 +86,17 @@ pub fn header(document: &DiffDocument, options: &Options) -> Vec<Cell> {
         Cell::new(format!("-{}", stats.removed), theme.removed),
         Cell::new(" ", Style::new()),
         Cell::new(format!("~{}", stats.modified), theme.modified),
-    ]
+    ];
+
+    // A diff that is entirely a move would otherwise read `+0 -0 ~0`, which
+    // says nothing happened. Shown only when there is one, so the common case
+    // keeps its three counts.
+    if stats.moved > 0 {
+        cells.push(Cell::new(" ", Style::new()));
+        cells.push(Cell::new(format!("⇄{}", stats.moved), theme.moved));
+    }
+
+    cells
 }
 
 /// Lay a document out into styled visual rows. No I/O, no terminal.
@@ -110,7 +120,10 @@ pub fn compose(
             continue;
         }
 
-        let styles = RowStyles::of(&row.kind, theme);
+        let mut styles = RowStyles::of(&row.kind, theme);
+        if matches!(row.kind, RowKind::Moved { .. }) && row.left.is_some() {
+            styles.glyph = marker::MOVED_FROM;
+        }
         let left = visual(
             row.left.as_ref(),
             |number| highlighting.old_line(number),
@@ -264,6 +277,17 @@ impl RowStyles {
                 glyph: marker::REPLACED,
                 marker: theme.modified,
             },
+            // One tint for the whole move, on whichever side it appears, with
+            // the marker saying which direction it went. Alternating by group
+            // keeps two adjacent moves apart.
+            RowKind::Moved { group } => {
+                let tint = if group % 2 == 0 {
+                    theme.moved
+                } else {
+                    theme.moved_alt
+                };
+                uniform(tint, tint, marker::MOVED_TO)
+            }
             RowKind::Fold { .. } => unreachable!("folds are drawn before this point"),
         }
     }
@@ -605,6 +629,41 @@ mod tests {
         let output = plain(&old, &new, 80);
         assert!(output.contains("unchanged lines"), "{output}");
         assert!(output.contains('⋯'), "{output}");
+    }
+
+    #[test]
+    fn a_diff_that_is_only_a_move_does_not_report_itself_as_empty() {
+        // `+0 -0 ~0` on a header reads as "nothing happened here", which is
+        // exactly wrong for a refactor that moved a function and changed
+        // nothing else.
+        let helper =
+            "fn helper(value: u32) -> u32 {\n    let doubled = value * 2;\n    doubled + 1\n}\n";
+        let caller = "fn main() {\n    let answer = helper(1);\n    println!(\"hi\");\n}\n";
+        let output = plain(
+            &format!("{helper}{caller}"),
+            &format!("{caller}{helper}"),
+            100,
+        );
+
+        let header = output.lines().next().expect("a header");
+        assert!(header.contains('⇄'), "the move count is missing: {header}");
+    }
+
+    #[test]
+    fn a_move_is_marked_in_both_directions() {
+        let helper =
+            "fn helper(value: u32) -> u32 {\n    let doubled = value * 2;\n    doubled + 1\n}\n";
+        let caller = "fn main() {\n    let answer = helper(1);\n    println!(\"hi\");\n}\n";
+        let output = plain(
+            &format!("{helper}{caller}"),
+            &format!("{caller}{helper}"),
+            100,
+        );
+
+        let (_, gone, _) = row_marked(&output, marker::MOVED_FROM);
+        assert!(gone.contains('<'), "{gone:?}");
+        let (_, arrived, _) = row_marked(&output, marker::MOVED_TO);
+        assert!(arrived.contains('>'), "{arrived:?}");
     }
 
     #[test]

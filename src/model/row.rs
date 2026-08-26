@@ -28,6 +28,14 @@ pub enum RowKind {
     /// readable — and *without* inline emphasis, because there is no
     /// correspondence to point at.
     Replaced,
+    /// A line that was not deleted or added but *moved*: it appears on the
+    /// other side somewhere else. The left slot means it left here, the right
+    /// slot means it arrived here.
+    ///
+    /// `group` identifies the block it moved with, so adjacent moves can be
+    /// tinted differently — otherwise two blocks that swapped places look like
+    /// one block.
+    Moved { group: usize },
     /// A run of equal rows that folding replaced. Neither side is present.
     Fold { hidden: usize },
 }
@@ -83,6 +91,22 @@ impl Row {
         }
     }
 
+    pub fn moved_from(left: Line, group: usize) -> Self {
+        Self {
+            kind: RowKind::Moved { group },
+            left: Some(left),
+            right: None,
+        }
+    }
+
+    pub fn moved_to(right: Line, group: usize) -> Self {
+        Self {
+            kind: RowKind::Moved { group },
+            left: None,
+            right: Some(right),
+        }
+    }
+
     pub fn fold(hidden: usize) -> Self {
         Self {
             kind: RowKind::Fold { hidden },
@@ -94,7 +118,11 @@ impl Row {
     pub fn is_change(&self) -> bool {
         matches!(
             self.kind,
-            RowKind::Added | RowKind::Removed | RowKind::Modified | RowKind::Replaced
+            RowKind::Added
+                | RowKind::Removed
+                | RowKind::Modified
+                | RowKind::Replaced
+                | RowKind::Moved { .. }
         )
     }
 }

@@ -96,6 +96,36 @@ pub fn render(
                         highlighting.new_line(right(row).number),
                     )?;
                 }
+                // Still a removal or an addition in patch terms — the output
+                // has to stay applicable — but marked and tinted as a move.
+                RowKind::Moved { group } => {
+                    let tint = if group % 2 == 0 {
+                        theme.moved
+                    } else {
+                        theme.moved_alt
+                    };
+                    match (&row.left, &row.right) {
+                        (Some(line), _) => self::line(
+                            out,
+                            options,
+                            marker::REMOVED,
+                            tint,
+                            tint,
+                            line,
+                            highlighting.old_line(line.number),
+                        )?,
+                        (_, Some(line)) => self::line(
+                            out,
+                            options,
+                            marker::ADDED,
+                            tint,
+                            tint,
+                            line,
+                            highlighting.new_line(line.number),
+                        )?,
+                        (None, None) => {}
+                    }
+                }
                 RowKind::Fold { .. } => unreachable!("folds delimit hunks"),
             }
         }

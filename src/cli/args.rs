@@ -97,6 +97,23 @@ pub struct Args {
     /// the foreground free.
     #[arg(long, value_enum, default_value_t = Syntax::Auto, global = true)]
     pub syntax: Syntax,
+
+    /// Ignore whitespace entirely when deciding what changed.
+    #[arg(
+        short = 'w',
+        long,
+        global = true,
+        conflicts_with = "ignore_space_change"
+    )]
+    pub ignore_all_space: bool,
+
+    /// Ignore changes in the amount of whitespace.
+    #[arg(short = 'b', long, global = true)]
+    pub ignore_space_change: bool,
+
+    /// Report a block that moved as a deletion and an addition.
+    #[arg(long, global = true)]
+    pub no_moved: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -211,6 +228,14 @@ impl Args {
                 Algorithm::Myers => diff::Algorithm::Myers,
             },
             context: (!self.full).then_some(self.context),
+            whitespace: if self.ignore_all_space {
+                diff::Whitespace::IgnoreAll
+            } else if self.ignore_space_change {
+                diff::Whitespace::IgnoreChange
+            } else {
+                diff::Whitespace::Respect
+            },
+            detect_moves: !self.no_moved,
         }
     }
 
@@ -311,6 +336,30 @@ mod tests {
         assert_eq!(parse(&[]).diff_options().context, Some(3));
         assert_eq!(parse(&["-U", "7"]).diff_options().context, Some(7));
         assert_eq!(parse(&["--full"]).diff_options().context, None);
+    }
+
+    #[test]
+    fn the_whitespace_flags_map_to_the_three_modes() {
+        assert_eq!(
+            parse(&[]).diff_options().whitespace,
+            diff::Whitespace::Respect
+        );
+        assert_eq!(
+            parse(&["-w"]).diff_options().whitespace,
+            diff::Whitespace::IgnoreAll
+        );
+        assert_eq!(
+            parse(&["-b"]).diff_options().whitespace,
+            diff::Whitespace::IgnoreChange
+        );
+        // Asking for both at once is a contradiction, not a precedence puzzle.
+        assert!(Args::try_parse_from(["gdiff", "-w", "-b", "a", "b"]).is_err());
+    }
+
+    #[test]
+    fn move_detection_is_on_unless_turned_off() {
+        assert!(parse(&[]).diff_options().detect_moves);
+        assert!(!parse(&["--no-moved"]).diff_options().detect_moves);
     }
 
     #[test]

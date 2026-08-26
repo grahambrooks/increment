@@ -10,11 +10,15 @@ right edge — the JetBrains diff view, in a terminal, in a pipe.
 
 ## Status
 
-**Phases 0–4 done.** gdiff diffs files or a git repository and renders them
+**Phases 0–5 done.** gdiff diffs files or a git repository and renders them
 side by side — as styled stdout, as JSON, or in an interactive browser — with
-alignment, word-level highlighting, folding and syntax colour. Move detection
-and optional structural diff (phase 5) are next; the per-phase criteria are in
+alignment, word-level highlighting, folding, syntax colour and move detection.
+The per-phase criteria and what was deliberately not built are in
 [`design/002-architecture-and-plan.md`](design/002-architecture-and-plan.md).
+
+A block that moved is shown as a move rather than as a wall of deletions and an
+equal wall of additions somewhere else — `<` where it left, `>` where it
+arrived. Detection is within a file; a block moved between files is not caught.
 
 ```sh
 gdiff old.rs new.rs              # two files; splits if the terminal is wide enough
@@ -94,6 +98,9 @@ full.
 | `--syntax auto\|on\|off` | `auto` highlights only where the palette leaves the foreground free |
 | `--color auto\|always\|never` | colour strips itself when piped regardless |
 | `--algorithm histogram\|myers` | |
+| `-w`, `--ignore-all-space` | whitespace does not count as a change |
+| `-b`, `--ignore-space-change` | changes in the *amount* of whitespace do not count |
+| `--no-moved` | report a moved block as a deletion and an addition |
 | `--patch`, `-p` | read a unified diff from stdin instead of comparing files |
 | `--width N`, `--min-split-width N` | |
 

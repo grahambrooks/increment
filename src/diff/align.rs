@@ -23,6 +23,7 @@ use crate::model::{Line, Row, SourceFile};
 
 use super::engine::Block;
 use super::inline::emphasis;
+use super::moves::Moves;
 use super::tokens::similarity;
 
 /// How alike two lines must be to read as one line that was edited rather than
@@ -40,7 +41,7 @@ const PAIR_THRESHOLD: f32 = 0.5;
 /// slower diff that can disagree with the first one.
 const LOOKAHEAD: usize = 3;
 
-pub fn align(old: &SourceFile, new: &SourceFile, blocks: &[Block]) -> Vec<Row> {
+pub fn align(old: &SourceFile, new: &SourceFile, blocks: &[Block], moves: &Moves) -> Vec<Row> {
     let mut rows = Vec::new();
     let (mut old_at, mut new_at) = (0usize, 0usize);
 
@@ -52,7 +53,7 @@ pub fn align(old: &SourceFile, new: &SourceFile, blocks: &[Block]) -> Vec<Row> {
             new_at += 1;
         }
 
-        rows.extend(pair(old, new, block));
+        rows.extend(pair(old, new, block, moves));
         old_at = block.old.end;
         new_at = block.new.end;
     }
@@ -67,11 +68,28 @@ pub fn align(old: &SourceFile, new: &SourceFile, blocks: &[Block]) -> Vec<Row> {
 }
 
 /// Pair the two sides of one block.
-fn pair(old: &SourceFile, new: &SourceFile, block: &Block) -> Vec<Row> {
+fn pair(old: &SourceFile, new: &SourceFile, block: &Block, moves: &Moves) -> Vec<Row> {
     let mut rows = Vec::new();
     let (mut i, mut j) = (block.old.start, block.new.start);
 
     while i < block.old.end && j < block.new.end {
+        // A moved line is spoken for. Pairing it with whatever happens to sit
+        // opposite would invent an edit between two unrelated pieces of code
+        // and hide the move that is the real story.
+        let from = moves.old.get(&i).copied();
+        let to = moves.new.get(&j).copied();
+        if from.is_some() || to.is_some() {
+            if let Some(group) = from {
+                rows.push(Row::moved_from(line(old, i), group));
+                i += 1;
+            }
+            if let Some(group) = to {
+                rows.push(Row::moved_to(line(new, j), group));
+                j += 1;
+            }
+            continue;
+        }
+
         if similarity(&old.lines[i], &new.lines[j]) >= PAIR_THRESHOLD {
             rows.push(modified(old, new, i, j));
             i += 1;
@@ -98,10 +116,16 @@ fn pair(old: &SourceFile, new: &SourceFile, block: &Block) -> Vec<Row> {
     }
 
     for k in i..block.old.end {
-        rows.push(Row::removed(line(old, k)));
+        rows.push(match moves.old.get(&k) {
+            Some(&group) => Row::moved_from(line(old, k), group),
+            None => Row::removed(line(old, k)),
+        });
     }
     for k in j..block.new.end {
-        rows.push(Row::added(line(new, k)));
+        rows.push(match moves.new.get(&k) {
+            Some(&group) => Row::moved_to(line(new, k), group),
+            None => Row::added(line(new, k)),
+        });
     }
 
     rows
@@ -198,14 +222,19 @@ fn line(file: &SourceFile, index: usize) -> Line {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diff::engine::{Algorithm, blocks};
+    use crate::diff::engine::{Algorithm, Whitespace, blocks};
     use crate::model::RowKind;
 
     fn rows_for(old: &str, new: &str) -> Vec<Row> {
         let old = SourceFile::from_text("old", old);
         let new = SourceFile::from_text("new", new);
-        let blocks = blocks(&old.lines, &new.lines, Algorithm::Histogram);
-        align(&old, &new, &blocks)
+        let blocks = blocks(
+            &old.lines,
+            &new.lines,
+            Algorithm::Histogram,
+            Whitespace::Respect,
+        );
+        align(&old, &new, &blocks, &Moves::default())
     }
 
     fn kinds(rows: &[Row]) -> Vec<RowKind> {
@@ -342,7 +371,13 @@ mod tests {
             let rows = align(
                 &old,
                 &new,
-                &blocks(&old.lines, &new.lines, Algorithm::Histogram),
+                &blocks(
+                    &old.lines,
+                    &new.lines,
+                    Algorithm::Histogram,
+                    Whitespace::Respect,
+                ),
+                &Moves::default(),
             );
 
             let seen = |slot: fn(&Row) -> Option<&Line>| -> Vec<(usize, String)> {

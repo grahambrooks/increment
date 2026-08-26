@@ -29,11 +29,17 @@ pub struct Stats {
     pub added: usize,
     pub removed: usize,
     pub modified: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub moved: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 impl Stats {
     pub fn any(&self) -> bool {
-        self.added > 0 || self.removed > 0 || self.modified > 0
+        self.added > 0 || self.removed > 0 || self.modified > 0 || self.moved > 0
     }
 }
 
@@ -77,6 +83,9 @@ impl DiffDocument {
                     stats.removed += 1;
                     stats.added += 1;
                 }
+                // A move is not an addition or a removal — counting it as one
+                // is exactly the overstatement move detection exists to fix.
+                RowKind::Moved { .. } => stats.moved += 1,
                 RowKind::Equal | RowKind::Fold { .. } => {}
             }
             stats

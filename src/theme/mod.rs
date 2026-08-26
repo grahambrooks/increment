@@ -36,6 +36,10 @@ pub struct Theme {
     /// row style it sits inside.
     pub added_emphasis: Style,
     pub removed_emphasis: Style,
+    /// A block that moved. Two tints, alternating by group: two blocks that
+    /// swapped places must not read as one.
+    pub moved: Style,
+    pub moved_alt: Style,
     pub gutter: Style,
     pub fold: Style,
     /// The empty half of a row where one side has no line.
@@ -77,6 +81,8 @@ impl Theme {
             modified: bg(0x1e, 0x2f, 0x45),
             added_emphasis: bg(0x2f, 0x6b, 0x45).bold(),
             removed_emphasis: bg(0x6e, 0x2f, 0x2f).bold(),
+            moved: bg(0x3a, 0x33, 0x1e),
+            moved_alt: bg(0x2b, 0x30, 0x3f),
             gutter: Style::new().fg_color(Some(Color::Rgb(RgbColor(0x6b, 0x72, 0x80)))),
             fold: Style::new().fg_color(Some(Color::Rgb(RgbColor(0x6b, 0x72, 0x80)))),
             filler: Style::new().bg_color(Some(Color::Rgb(RgbColor(0x1a, 0x1b, 0x1e)))),
@@ -96,6 +102,8 @@ impl Theme {
             modified: fg(AnsiColor::Blue),
             added_emphasis: fg(AnsiColor::Green).bold().underline(),
             removed_emphasis: fg(AnsiColor::Red).bold().underline(),
+            moved: fg(AnsiColor::Yellow),
+            moved_alt: fg(AnsiColor::Cyan),
             gutter: fg(AnsiColor::BrightBlack),
             fold: fg(AnsiColor::BrightBlack),
             filler: Style::new(),
@@ -112,6 +120,8 @@ impl Theme {
             modified: plain,
             added_emphasis: plain,
             removed_emphasis: plain,
+            moved: plain,
+            moved_alt: plain,
             gutter: plain,
             fold: plain,
             filler: plain,
@@ -139,6 +149,10 @@ pub mod marker {
     pub const MODIFIED: char = '~';
     /// `diff -c`'s glyph for a changed line, kept for the same meaning.
     pub const REPLACED: char = '!';
+    /// Left from here.
+    pub const MOVED_FROM: char = '<';
+    /// Arrived here.
+    pub const MOVED_TO: char = '>';
     pub const EQUAL: char = ' ';
     pub const FOLD: char = '⋯';
 }
@@ -162,12 +176,21 @@ mod tests {
     #[test]
     fn every_change_kind_is_visually_distinct_in_each_palette() {
         for theme in [Theme::dark(), Theme::ansi()] {
-            let styles = [theme.added, theme.removed, theme.modified];
+            let styles = [theme.added, theme.removed, theme.modified, theme.moved];
             for (i, a) in styles.iter().enumerate() {
                 for b in styles.iter().skip(i + 1) {
                     assert_ne!(a, b, "two change kinds share a style");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_two_move_tints_differ_from_each_other() {
+        // Two blocks that swapped places share a boundary. One tint for both
+        // reads as a single block, which is what alternating them prevents.
+        for theme in [Theme::dark(), Theme::ansi()] {
+            assert_ne!(theme.moved, theme.moved_alt);
         }
     }
 
@@ -202,6 +225,8 @@ mod tests {
             marker::REMOVED,
             marker::MODIFIED,
             marker::REPLACED,
+            marker::MOVED_FROM,
+            marker::MOVED_TO,
             marker::EQUAL,
             marker::FOLD,
         ];
