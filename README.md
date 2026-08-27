@@ -53,11 +53,13 @@ holding `j` down the log stays instant.
 |---|---|
 | `↵` | open the selected commit |
 | `j` `k` | move |
-| `Tab` | move between the commit list and the diff |
+| `Tab` | commits → the commit's file list → the diff → commits |
 | `q` | back — or quit, from the list |
 | `Q` | quit |
 
-Inside the diff, every key from the browser below still works.
+Inside the diff, every key from the browser below still works, and the file list
+keeps the focus as you move between commits — so you can work down a branch
+looking at one file's history without re-selecting it each time.
 
 ## The browser
 
@@ -74,11 +76,15 @@ changed across the whole file and where you are in it.
 | `Ctrl-f` `Ctrl-b`, `PgDn` `PgUp` | page |
 | `g` `G`, `Home` `End` | top, bottom |
 | `n` `N` | next, previous change — or search match, when a search is active |
-| `]` `[` | next, previous file |
+| `]` `[` | next, previous file, without leaving the diff |
 | `f` | unfold, showing every line rather than the context |
 | `/` | search; `Enter` commits, `Esc` cancels |
-| `Tab` | move between the file list and the diff |
+| `Tab` | move to the file list, then back to the diff |
 | `q`, `Esc`, `Ctrl-c` | quit |
+
+With the file list focused, `j` `k` (and `g` `G`, `PgUp` `PgDn`) choose a file
+and `Enter` returns to the diff to read it. The list is skipped when only one
+file changed, since there would be nothing to choose.
 
 The browser is always an explicit request. `--ui auto` never selects it: an
 alternate screen cannot be piped, redirected or read by CI, and `auto` is what

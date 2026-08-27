@@ -151,6 +151,27 @@ positioning change rather than a feature, and it was taken deliberately on 2026-
 `CLAUDE.md`'s positioning section now says so. gdiff is still not a git browser: the line in §2
 is what keeps it from becoming one, and it holds.
 
+## 5a. Keyboard navigation for files (2026-08-27)
+
+Tab has three stops rather than two: commits → the commit's file list → the diff. Two things
+made that necessary, and the first was a defect rather than a gap.
+
+- **`Focus::Files` was decorative.** Phase 4 gave the browser a file-list focus and drew a border
+  for it, but the movement keys always scrolled the diff — the focus changed a colour and nothing
+  else. With the list focused, `j`/`k`, `g`/`G` and the page keys now choose a file, and `Enter`
+  returns to the diff to read it.
+- **From a review the list could not be reached at all.** The file list belongs to the diff view,
+  and the review's Tab went straight past it to the diff body, so the keys that drive it were
+  unreachable no matter what they did.
+
+The list is skipped when a commit touched one file: focusing something with nothing to choose is
+a dead end where every key does nothing and only another Tab gets you out. The focus also carries
+across commits, so working down a branch looking at one file's history does not mean re-selecting
+it on every one.
+
+The status line follows the focused pane — `file 2/7  j/k choose  ↵ open  Tab diff` — because
+showing the diff's keys over a focused file list advertises keys that choose nothing there.
+
 ## 6. Still outstanding
 
 - **6c — scale.** The log loads in full before the first frame, and the selected commit is diffed

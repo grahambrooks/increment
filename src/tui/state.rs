@@ -114,6 +114,8 @@ pub enum Action {
     PreviousChange,
     NextFile,
     PreviousFile,
+    /// Leave the file list for the diff of the file just chosen.
+    OpenFile,
     ToggleFold,
     ToggleFocus,
     SearchStart,
@@ -208,6 +210,21 @@ impl App {
         self.focus
     }
 
+    pub fn set_focus(&mut self, focus: Focus) {
+        // Focusing a list with nothing to choose from is a dead end: the keys
+        // would do nothing and the only way out would be another Tab.
+        self.focus = if focus == Focus::Files && !self.can_choose_file() {
+            Focus::Diff
+        } else {
+            focus
+        };
+    }
+
+    /// Whether there is more than one file to move between.
+    pub fn can_choose_file(&self) -> bool {
+        self.entries.len() > 1
+    }
+
     pub fn search(&self) -> &Search {
         &self.search
     }
@@ -289,6 +306,29 @@ impl App {
 
         match action {
             Action::Quit => self.quit = true,
+            // With the file list focused these choose a file; with the diff
+            // focused they scroll it. Before this the focus only recoloured a
+            // border — the keys scrolled the diff either way, which made the
+            // file list something you could look at but not use.
+            Action::Up
+            | Action::Down
+            | Action::PageUp
+            | Action::PageDown
+            | Action::Top
+            | Action::Bottom
+                if self.focus == Focus::Files =>
+            {
+                let last = self.entries.len().saturating_sub(1);
+                let step = self.height.max(1);
+                self.select(match action {
+                    Action::Up => self.selected.saturating_sub(1),
+                    Action::Down => (self.selected + 1).min(last),
+                    Action::PageUp => self.selected.saturating_sub(step),
+                    Action::PageDown => (self.selected + step).min(last),
+                    Action::Top => 0,
+                    _ => last,
+                });
+            }
             Action::Up => self.scroll = self.scroll.saturating_sub(1),
             Action::Down => self.scroll += 1,
             Action::PageUp => self.scroll = self.scroll.saturating_sub(self.height),
@@ -300,12 +340,13 @@ impl App {
             Action::NextFile => self.select(self.selected.saturating_add(1)),
             Action::PreviousFile => self.select(self.selected.saturating_sub(1)),
             Action::ToggleFold => self.toggle_fold(),
-            Action::ToggleFocus => {
-                self.focus = match self.focus {
-                    Focus::Files => Focus::Diff,
-                    Focus::Diff => Focus::Files,
-                }
-            }
+            // Choosing a file and then reading it are two steps, and this is
+            // the second: the file list is behind you now.
+            Action::OpenFile => self.focus = Focus::Diff,
+            Action::ToggleFocus => self.set_focus(match self.focus {
+                Focus::Files => Focus::Diff,
+                Focus::Diff => Focus::Files,
+            }),
             Action::SearchStart => self.search = Search::Typing(String::new()),
             Action::SearchCancel => self.search = Search::Off,
             Action::SearchType(_) | Action::SearchBackspace | Action::SearchCommit => {}
@@ -884,11 +925,102 @@ mod tests {
 
     #[test]
     fn focus_moves_between_the_panes_and_back() {
-        let mut app = app(vec![long()], 10);
+        let mut app = app(vec![long(), long()], 10);
         assert_eq!(app.focus(), Focus::Diff);
         app.apply(Action::ToggleFocus);
         assert_eq!(app.focus(), Focus::Files);
         app.apply(Action::ToggleFocus);
+        assert_eq!(app.focus(), Focus::Diff);
+    }
+
+    #[test]
+    fn the_file_list_cannot_be_focused_when_there_is_nothing_to_choose() {
+        // One file: focusing the list would be a dead end where every key does
+        // nothing and only another Tab gets you out.
+        let mut app = app(vec![long()], 10);
+        assert!(!app.can_choose_file());
+        app.apply(Action::ToggleFocus);
+        assert_eq!(app.focus(), Focus::Diff);
+    }
+
+    #[test]
+    fn with_the_file_list_focused_the_movement_keys_choose_a_file() {
+        let mut app = app(vec![long(), long(), long()], 10);
+        app.apply(Action::ToggleFocus);
+
+        app.apply(Action::Down);
+        assert_eq!(app.selected(), 1);
+        app.apply(Action::Down);
+        assert_eq!(app.selected(), 2);
+        app.apply(Action::Up);
+        assert_eq!(app.selected(), 1);
+    }
+
+    #[test]
+    fn choosing_a_file_does_not_scroll_the_diff_instead() {
+        // The bug this replaces: the focus recoloured a border and nothing
+        // else, so `j` scrolled the diff whichever pane you thought you were in.
+        let mut app = app(vec![long(), long()], 10);
+        app.apply(Action::Down);
+        app.apply(Action::Down);
+        let scrolled = app.scroll();
+        assert!(scrolled > 0, "the diff should have scrolled while focused");
+
+        app.apply(Action::ToggleFocus);
+        app.apply(Action::Down);
+        assert_eq!(app.selected(), 1, "the file should have changed");
+        // A new file starts at the top, rather than inheriting the last one's
+        // scroll position.
+        assert_eq!(app.scroll(), 0);
+    }
+
+    #[test]
+    fn the_file_list_selection_stops_at_both_ends() {
+        let mut app = app(vec![long(), long()], 10);
+        app.apply(Action::ToggleFocus);
+
+        app.apply(Action::Up);
+        assert_eq!(app.selected(), 0);
+        for _ in 0..5 {
+            app.apply(Action::Down);
+        }
+        assert_eq!(app.selected(), 1);
+    }
+
+    #[test]
+    fn top_and_bottom_jump_to_the_first_and_last_file() {
+        let mut app = app(vec![long(), long(), long(), long()], 10);
+        app.apply(Action::ToggleFocus);
+
+        app.apply(Action::Bottom);
+        assert_eq!(app.selected(), 3);
+        app.apply(Action::Top);
+        assert_eq!(app.selected(), 0);
+    }
+
+    #[test]
+    fn enter_leaves_the_file_list_for_the_file_it_chose() {
+        let mut app = app(vec![long(), long()], 10);
+        app.apply(Action::ToggleFocus);
+        app.apply(Action::Down);
+        app.apply(Action::OpenFile);
+
+        assert_eq!(app.focus(), Focus::Diff);
+        assert_eq!(app.selected(), 1, "the chosen file stays chosen");
+        // …and the movement keys are the diff's again.
+        app.apply(Action::Down);
+        assert_eq!(app.selected(), 1);
+    }
+
+    #[test]
+    fn the_bracket_keys_still_change_file_from_the_diff() {
+        // Choosing from the list is the addition, not a replacement: moving
+        // between files without leaving the diff is the faster path when you
+        // are reading rather than looking for something.
+        let mut app = app(vec![long(), long()], 10);
+        assert_eq!(app.focus(), Focus::Diff);
+        app.apply(Action::NextFile);
+        assert_eq!(app.selected(), 1);
         assert_eq!(app.focus(), Focus::Diff);
     }
 

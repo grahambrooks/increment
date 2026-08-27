@@ -16,7 +16,7 @@
 use crate::render::Options;
 use crate::source::git::Commit;
 
-use super::state::{Action, App, Entry};
+use super::state::{Action, App, Entry, Focus};
 
 /// A row of the review list.
 ///
@@ -249,14 +249,7 @@ impl<'a> Review<'a> {
                 Mode::List => self.quit = true,
             },
             Event::Open => self.open(),
-            Event::ToggleFocus => {
-                self.focus = match (self.mode, self.focus) {
-                    // Nothing to move to until something is open.
-                    (Mode::List, _) => Pane::Log,
-                    (Mode::Split, Pane::Log) => Pane::Diff,
-                    (Mode::Split, Pane::Diff) => Pane::Log,
-                };
-            }
+            Event::ToggleFocus => self.cycle_focus(),
             Event::Up
             | Event::Down
             | Event::PageUp
@@ -266,6 +259,44 @@ impl<'a> Review<'a> {
             Event::Diff(action) => {
                 if let Some(diff) = self.diff.as_mut() {
                     diff.apply(action);
+                }
+            }
+        }
+    }
+
+    /// Move to the next pane: commits, then the file list, then the diff.
+    ///
+    /// Three stops rather than two. The file list belongs to the diff view, so
+    /// without a stop here it could not be reached from a review at all — Tab
+    /// went straight past it, and the keys that drive it were unreachable.
+    ///
+    /// The file list is skipped when a commit touched only one file, because
+    /// focusing a list with nothing to choose from is a dead end.
+    fn cycle_focus(&mut self) {
+        // Nothing to move to until something is open.
+        if self.mode == Mode::List {
+            self.focus = Pane::Log;
+            return;
+        }
+
+        match self.focus {
+            Pane::Log => {
+                self.focus = Pane::Diff;
+                if let Some(diff) = self.diff.as_mut() {
+                    diff.set_focus(Focus::Files);
+                }
+            }
+            Pane::Diff => {
+                let on_files = self
+                    .diff
+                    .as_ref()
+                    .is_some_and(|diff| diff.focus() == Focus::Files);
+                if on_files {
+                    if let Some(diff) = self.diff.as_mut() {
+                        diff.set_focus(Focus::Diff);
+                    }
+                } else {
+                    self.focus = Pane::Log;
                 }
             }
         }
@@ -345,8 +376,13 @@ impl<'a> Review<'a> {
         match (self.loader)(&item) {
             Ok(entries) => {
                 self.loaded = Some(item.key().to_owned());
+                // Carry the reader's place across: with the split tracking the
+                // selection, a reader working through the file list should not
+                // be thrown back into the diff body by the next commit.
+                let was = self.diff.as_ref().map(App::focus).unwrap_or(Focus::Diff);
                 let mut diff = App::new(entries, self.options);
                 diff.nest();
+                diff.set_focus(was);
                 self.diff = Some(diff);
             }
             Err(error) => {
@@ -397,6 +433,10 @@ mod tests {
 
     fn commits(count: usize) -> Vec<Item> {
         (0..count).map(|n| Item::Commit(commit(n))).collect()
+    }
+
+    fn entries(count: usize) -> Vec<Entry> {
+        (0..count).map(|_| entry()).collect()
     }
 
     fn entry() -> Entry {
@@ -630,6 +670,83 @@ mod tests {
             review.apply(Event::Down);
         }
         assert_eq!(review.selected(), 2);
+    }
+
+    /// A review with `files` files in every commit.
+    fn review_with_files(files: usize) -> Review<'static> {
+        let loader: Loader<'static> = Box::new(move |_: &Item| Ok(entries(files)));
+        let mut review = Review::new(commits(5), loader, options());
+        review.set_log_viewport(5);
+        review
+    }
+
+    #[test]
+    fn tab_stops_at_the_file_list_between_the_commits_and_the_diff() {
+        // Three stops, not two. The file list belongs to the diff view, so
+        // without a stop here it cannot be reached from a review at all.
+        let mut review = review_with_files(3);
+        review.apply(Event::Open);
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.focus(), Pane::Log);
+
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.focus(), Pane::Diff);
+        assert_eq!(review.diff().map(App::focus), Some(Focus::Files));
+
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.focus(), Pane::Diff);
+        assert_eq!(review.diff().map(App::focus), Some(Focus::Diff));
+
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.focus(), Pane::Log);
+    }
+
+    #[test]
+    fn tab_skips_the_file_list_when_a_commit_touched_one_file() {
+        let mut review = review_with_files(1);
+        review.apply(Event::Open);
+        review.apply(Event::ToggleFocus);
+        review.apply(Event::ToggleFocus);
+
+        assert_eq!(review.focus(), Pane::Diff);
+        assert_eq!(
+            review.diff().map(App::focus),
+            Some(Focus::Diff),
+            "there is nothing to choose, so the list is not a stop"
+        );
+    }
+
+    #[test]
+    fn choosing_a_file_works_through_the_review() {
+        let mut review = review_with_files(4);
+        review.apply(Event::Open);
+        review.apply(Event::ToggleFocus);
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.diff().map(App::focus), Some(Focus::Files));
+
+        review.apply(Event::Diff(Action::Down));
+        review.apply(Event::Diff(Action::Down));
+        assert_eq!(review.diff().map(App::selected), Some(2));
+    }
+
+    #[test]
+    fn the_file_list_keeps_the_focus_across_commits() {
+        // With the split tracking the selection, a reader working through the
+        // file list should not be thrown into the diff body by the next commit.
+        let mut review = review_with_files(3);
+        review.apply(Event::Open);
+        review.apply(Event::ToggleFocus);
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.diff().map(App::focus), Some(Focus::Files));
+
+        review.apply(Event::ToggleFocus);
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.focus(), Pane::Log);
+        review.apply(Event::Down);
+        review.settle();
+
+        review.apply(Event::ToggleFocus);
+        assert_eq!(review.diff().map(App::focus), Some(Focus::Files));
     }
 
     #[test]

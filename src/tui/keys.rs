@@ -44,6 +44,9 @@ pub fn action(key: KeyEvent, search: &Search) -> Option<Action> {
         (KeyCode::Char('[') | KeyCode::Char('K'), false) => Some(Action::PreviousFile),
 
         (KeyCode::Char('f'), false) => Some(Action::ToggleFold),
+        // Meaningful only with the file list focused, where it says "this one";
+        // in the diff it is unbound rather than doing something surprising.
+        (KeyCode::Enter, _) => Some(Action::OpenFile),
         (KeyCode::Tab, _) => Some(Action::ToggleFocus),
         (KeyCode::Char('/'), false) => Some(Action::SearchStart),
         _ => None,
@@ -106,6 +109,13 @@ pub const HINTS: &[(&str, &str)] = &[
     ("/", "search"),
     ("q", "quit"),
 ];
+
+/// The keys that mean something with the file list focused.
+///
+/// A different set because the movement keys do a different thing there —
+/// showing "n/N change" over a pane where `n` chooses nothing would be the same
+/// lie as advertising a key that is not bound.
+pub const FILE_HINTS: &[(&str, &str)] = &[("j/k", "choose"), ("↵", "open"), ("Tab", "diff")];
 
 /// The same, for a diff opened from the review — where `q` goes back to the
 /// commit list rather than quitting.
@@ -268,6 +278,30 @@ mod tests {
         assert_eq!(
             review_action(press(KeyCode::Char('Q')), Pane::Diff, &typing),
             Some(Event::Diff(Action::SearchType('Q')))
+        );
+    }
+
+    #[test]
+    fn every_file_list_hint_names_a_key_that_is_bound_there() {
+        for (keys, what) in FILE_HINTS {
+            let first = keys.chars().next().expect("a key");
+            let code = match first {
+                '↵' => KeyCode::Enter,
+                'T' => KeyCode::Tab,
+                c => KeyCode::Char(c),
+            };
+            assert!(
+                action(press(code), &Search::Off).is_some(),
+                "the file list offers {keys:?} for {what}, but it is not bound"
+            );
+        }
+    }
+
+    #[test]
+    fn enter_chooses_the_file_the_list_is_on() {
+        assert_eq!(
+            action(press(KeyCode::Enter), &Search::Off),
+            Some(Action::OpenFile)
         );
     }
 

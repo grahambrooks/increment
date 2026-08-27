@@ -351,3 +351,70 @@ fn an_empty_history_says_so() {
     let drawn = draw_review(&mut empty, 60, 8);
     assert!(drawn.contains("no commits"), "{drawn}");
 }
+
+#[test]
+fn the_focused_file_list_says_what_its_keys_do() {
+    // The status line belongs to whichever pane is being driven. Showing the
+    // diff's keys over a focused file list would advertise keys that choose
+    // nothing there.
+    let mut app = app(vec![
+        long("src/main.rs"),
+        entry("src/lib.rs", "pub fn a() {}\n", "pub fn b() {}\n"),
+        entry("README.md", "# one\n", "# two\n"),
+    ]);
+    let _ = draw(&mut app, 110, 16);
+    app.apply(Action::ToggleFocus);
+    app.apply(Action::Down);
+
+    let drawn = draw(&mut app, 110, 16);
+    assert!(drawn.contains("file 2/3"), "{drawn}");
+    assert!(drawn.contains("j/k choose"), "{drawn}");
+    assert!(
+        !drawn.contains("n/N change"),
+        "the diff's keys are shown: {drawn}"
+    );
+}
+
+#[test]
+fn choosing_a_file_shows_that_file() {
+    let mut app = app(vec![
+        long("src/main.rs"),
+        entry("src/lib.rs", "pub fn a() {}\n", "pub fn b() {}\n"),
+    ]);
+    let _ = draw(&mut app, 110, 16);
+
+    let first = draw(&mut app, 110, 16);
+    assert!(first.contains("b/src/main.rs"), "{first}");
+
+    app.apply(Action::ToggleFocus);
+    app.apply(Action::Down);
+    let second = draw(&mut app, 110, 16);
+    assert!(second.contains("b/src/lib.rs"), "{second}");
+    assert!(second.contains("pub fn b()"), "{second}");
+}
+
+#[test]
+fn the_file_list_in_a_review_can_be_focused() {
+    let loader: Loader<'static> = Box::new(|_| {
+        Ok(vec![
+            long("src/main.rs"),
+            long("src/lib.rs"),
+            long("README.md"),
+        ])
+    });
+    let mut review = Review::new(
+        vec![Item::from(commit(0x3f2a1c9, "Phase 5: move detection"))],
+        loader,
+        RenderOptions {
+            theme: Theme::none(),
+            ..RenderOptions::default()
+        },
+    );
+    let _ = draw_review(&mut review, 110, 24);
+    review.apply(Event::Open);
+    // Log -> file list.
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::ToggleFocus);
+
+    insta::assert_snapshot!(draw_review(&mut review, 110, 24));
+}

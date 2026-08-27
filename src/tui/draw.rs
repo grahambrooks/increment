@@ -15,7 +15,7 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use crate::model::RowKind;
 use crate::theme::marker;
 
-use super::keys::{HINTS, NESTED_HINTS, REVIEW_HINTS};
+use super::keys::{FILE_HINTS, HINTS, NESTED_HINTS, REVIEW_HINTS};
 use super::review::{Mode, Pane, Review};
 use super::state::{App, Focus, Search};
 
@@ -227,6 +227,12 @@ fn draw_status(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn position(app: &App) -> String {
+    // Which file, when the file list is what is being moved. "row 4/280" is
+    // about a diff the reader is not currently driving.
+    if app.focus() == Focus::Files {
+        return format!("file {}/{}", app.selected() + 1, app.entries().len());
+    }
+
     let total = app.layout().len();
     let Some(document) = app.document() else {
         return "no changes".to_owned();
@@ -251,8 +257,12 @@ fn position(app: &App) -> String {
 }
 
 fn hints(app: &App) -> String {
-    if app.is_nested() { NESTED_HINTS } else { HINTS }
-        .iter()
+    let set = match (app.focus(), app.is_nested()) {
+        (Focus::Files, _) => FILE_HINTS,
+        (_, true) => NESTED_HINTS,
+        (_, false) => HINTS,
+    };
+    set.iter()
         .map(|(keys, what)| format!("{keys} {what}"))
         .collect::<Vec<_>>()
         .join("  ")
