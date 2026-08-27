@@ -172,6 +172,40 @@ it on every one.
 The status line follows the focused pane — `file 2/7  j/k choose  ↵ open  Tab diff` — because
 showing the diff's keys over a focused file list advertises keys that choose nothing there.
 
+## 5b. Settings at runtime, and what a commit costs to open (2026-08-27)
+
+**Opening a commit took a second or two.** Measured, almost all of it was highlighting one file,
+and two other things were being done on the load path that nothing had asked for.
+
+| | before | after |
+|---|---|---|
+| first frame, debug | 2.10 s | **29 ms** |
+| first frame, release | ~130 ms | **8 ms** |
+
+- The **unfolded document was built for every file on load**, doubling the diffing done per
+  commit to serve a key most files never get. It waits for `f` now.
+- **Highlighting moved off the load path.** The diff draws, and the colours arrive on the next
+  frame, done on the same idle path the deferred diff already uses.
+- **Highlighting is bounded by a clock.** This project's own README — 176 lines of markdown with
+  tables — takes 1.6 s to highlight in debug and 120 ms in release, while a markdown file of the
+  same length beside it takes 98 ms and 9 ms. That is catastrophic backtracking in `fancy-regex`,
+  and no bound on file *size* finds it. The budget is checked on every line rather than every
+  sixteenth, because one pathological line can cost 200 ms and a stride overshot by 900 ms.
+  A single line still cannot be preempted, which is the honest limit of this approach.
+
+**Settings changed while reading.** `?` lists the keys and the current value of each. `f`, `x`
+and `m` change what the diff *is* and so diff the files again — which is why an `Entry` keeps its
+two source files rather than only the document it produced. The rest only change how it is drawn
+and need nothing but a relayout.
+
+Two things that fell out of doing it:
+
+- **A setting belongs to the reader, not to the commit.** Changing one inside a commit applies to
+  the next, which meant the review had to own the settings and hand them to each `App` it builds.
+- **Turning syntax colour off stops it being computed**, not just drawn — which matters, given
+  what it costs. Choosing a foreground palette does the same, because such a palette has already
+  spent the channel.
+
 ## 6. Still outstanding
 
 - **6c — scale.** The log loads in full before the first frame, and the selected commit is diffed

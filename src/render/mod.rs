@@ -17,7 +17,7 @@ use std::io::Write;
 
 use crate::highlight::Highlighting;
 use crate::model::DiffDocument;
-use crate::theme::Theme;
+use crate::theme::{Palette, Theme};
 
 use width::Wrap;
 
@@ -25,6 +25,11 @@ use width::Wrap;
 #[derive(Debug, Clone, Copy)]
 pub struct Options {
     pub theme: Theme,
+    /// Which palette `theme` came from, so cycling knows where it is.
+    ///
+    /// Set this through [`Options::set_palette`] rather than on its own: the
+    /// two have to agree, and nothing else notices if they stop.
+    pub palette: Palette,
     pub tab_width: usize,
     pub wrap: Wrap,
     /// Columns available, or `None` when the width is unknown — output is not
@@ -36,18 +41,82 @@ pub struct Options {
     pub min_split_width: usize,
     /// Show line numbers in the gutter.
     pub line_numbers: bool,
+    /// Colour tokens by syntax, where the palette leaves room for it.
+    ///
+    /// Here rather than decided once at startup, so it can be turned off while
+    /// reading — which is the difference between a setting and a flag.
+    pub syntax: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
             theme: Theme::default(),
+            palette: Palette::default(),
             tab_width: 4,
             wrap: Wrap::default(),
             width: None,
             min_split_width: 120,
             line_numbers: true,
+            syntax: true,
         }
+    }
+}
+
+/// The settings a reader can change without restarting.
+///
+/// Toggling lives on the options rather than in a view, because two views need
+/// it — the browser owns its settings, and the review owns settings that
+/// outlive the commit currently on screen.
+impl Options {
+    /// Choose a palette, and the theme that goes with it.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+        self.theme = Theme::new(palette);
+    }
+
+    pub fn toggle_wrap(&mut self) {
+        self.wrap = match self.wrap {
+            Wrap::Wrap => Wrap::Truncate,
+            Wrap::Truncate => Wrap::Wrap,
+        };
+    }
+
+    pub fn toggle_syntax(&mut self) {
+        self.syntax = !self.syntax;
+    }
+
+    pub fn toggle_line_numbers(&mut self) {
+        self.line_numbers = !self.line_numbers;
+    }
+
+    /// Dark, then the sixteen colours, then none, then round again.
+    pub fn cycle_theme(&mut self) {
+        self.set_palette(match self.palette {
+            Palette::Dark => Palette::Ansi,
+            Palette::Ansi => Palette::None,
+            // `Auto` has already resolved to one of the others by the time
+            // anyone can press a key, so it is a starting point, not a stop.
+            Palette::None | Palette::Auto => Palette::Dark,
+        });
+    }
+
+    /// What the status line should call the current palette.
+    pub fn palette_name(&self) -> &'static str {
+        match self.palette {
+            Palette::Auto => "auto",
+            Palette::Dark => "dark",
+            Palette::Ansi => "ansi",
+            Palette::None => "none",
+        }
+    }
+
+    /// Whether syntax colour can be drawn at all with this palette.
+    ///
+    /// A palette that says "added" in the foreground has already spent the
+    /// channel; see [`Theme::carries_change_in_background`].
+    pub fn syntax_visible(&self) -> bool {
+        self.syntax && self.theme.carries_change_in_background()
     }
 }
 
@@ -107,6 +176,50 @@ pub fn render(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setting_a_palette_moves_the_theme_with_it() {
+        // The two are separate fields and have to agree; nothing else notices
+        // if they stop, which is why they are set together.
+        let mut options = Options::default();
+        options.set_palette(Palette::Dark);
+        assert_eq!(options.palette_name(), "dark");
+        assert!(options.theme.carries_change_in_background());
+
+        options.set_palette(Palette::Ansi);
+        assert_eq!(options.palette_name(), "ansi");
+        assert!(!options.theme.carries_change_in_background());
+    }
+
+    #[test]
+    fn cycling_the_theme_visits_each_palette_and_returns() {
+        let mut options = Options::default();
+        options.set_palette(Palette::Dark);
+        options.cycle_theme();
+        assert_eq!(options.palette_name(), "ansi");
+        options.cycle_theme();
+        assert_eq!(options.palette_name(), "none");
+        options.cycle_theme();
+        assert_eq!(options.palette_name(), "dark");
+        // …and the theme follows the palette, rather than being left behind.
+        assert!(options.theme.carries_change_in_background());
+    }
+
+    #[test]
+    fn syntax_colour_is_only_visible_where_the_palette_leaves_room() {
+        let mut options = Options::default();
+        options.set_palette(Palette::Dark);
+        assert!(options.syntax_visible());
+
+        // A foreground palette has already spent the channel.
+        options.cycle_theme();
+        assert!(!options.syntax_visible());
+
+        // …and asking for it off means off, whatever the palette.
+        options.set_palette(Palette::Dark);
+        options.toggle_syntax();
+        assert!(!options.syntax_visible());
+    }
 
     #[test]
     fn a_narrow_terminal_falls_back_to_unified() {

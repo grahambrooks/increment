@@ -81,7 +81,27 @@ changed across the whole file and where you are in it.
 | `f` | show the whole file, or fold back to the changed parts |
 | `/` | search; `Enter` commits, `Esc` cancels |
 | `Tab` | move to the file list, then back to the diff |
+| `?` | the keys, and what every setting is currently set to |
 | `q`, `Esc`, `Ctrl-c` | quit |
+
+Every option that matters while reading can be changed without restarting, and
+`?` shows both the keys and the current value of each:
+
+| Key | | |
+|---|---|---|
+| `f` | showing | changed parts ⇄ whole file |
+| `x` | whitespace | respect → ignore-change → ignore-all |
+| `m` | moved blocks | on ⇄ off |
+| `w` | long lines | wrapped ⇄ truncated |
+| `s` | syntax colour | on ⇄ off |
+| `t` | theme | dark → ansi → none |
+| `#` | line numbers | on ⇄ off |
+
+`f`, `x` and `m` change what the diff *is*, so they diff the files again; the
+rest only change how it is drawn. In a review they carry across commits — a
+setting belongs to the reader, not to the commit they happened to be looking at.
+A diff read from a patch has no files to diff again, and says so rather than
+silently ignoring `x` and `m`.
 
 With the file list focused, `j` `k` (and `g` `G`, `PgUp` `PgDn`) choose a file
 and `Enter` returns to the diff to read it. The list is skipped when only one

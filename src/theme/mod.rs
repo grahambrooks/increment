@@ -53,16 +53,25 @@ impl Default for Theme {
     }
 }
 
+impl Palette {
+    /// What `auto` means here and now.
+    ///
+    /// Resolved once, up front, so anything that cycles palettes at runtime
+    /// starts from a concrete one rather than from "whatever the environment
+    /// says", which would make the cycle skip a step.
+    pub fn resolve_auto() -> Self {
+        if truecolor_available() {
+            Self::Dark
+        } else {
+            Self::Ansi
+        }
+    }
+}
+
 impl Theme {
     pub fn new(palette: Palette) -> Self {
         match palette {
-            Palette::Auto => {
-                if truecolor_available() {
-                    Self::dark()
-                } else {
-                    Self::ansi()
-                }
-            }
+            Palette::Auto => Self::new(Palette::resolve_auto()),
             Palette::Dark => Self::dark(),
             Palette::Ansi => Self::ansi(),
             Palette::None => Self::none(),

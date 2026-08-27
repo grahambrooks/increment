@@ -27,7 +27,7 @@ pub use engine::{Algorithm, Whitespace};
 use crate::model::{DiffDocument, SourceFile};
 
 /// How to compute a diff.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Options {
     pub algorithm: Algorithm,
     /// Unchanged lines to keep either side of a change. `None` shows the whole
@@ -47,6 +47,34 @@ impl Default for Options {
             context: Some(3),
             whitespace: Whitespace::default(),
             detect_moves: true,
+        }
+    }
+}
+
+/// The settings a reader can change while reading.
+///
+/// Unlike the render options, changing any of these means diffing again — they
+/// decide what the diff *is*, not how it is drawn.
+impl Options {
+    /// Respect whitespace, then ignore changes in it, then ignore it entirely.
+    pub fn cycle_whitespace(&mut self) {
+        self.whitespace = match self.whitespace {
+            Whitespace::Respect => Whitespace::IgnoreChange,
+            Whitespace::IgnoreChange => Whitespace::IgnoreAll,
+            Whitespace::IgnoreAll => Whitespace::Respect,
+        };
+    }
+
+    pub fn toggle_moves(&mut self) {
+        self.detect_moves = !self.detect_moves;
+    }
+
+    /// What the status line should call the current whitespace setting.
+    pub fn whitespace_name(&self) -> &'static str {
+        match self.whitespace {
+            Whitespace::Respect => "respect",
+            Whitespace::IgnoreChange => "ignore-change",
+            Whitespace::IgnoreAll => "ignore-all",
         }
     }
 }
@@ -71,6 +99,18 @@ pub fn compare(old: &SourceFile, new: &SourceFile, options: &Options) -> DiffDoc
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cycling_whitespace_returns_to_where_it_started() {
+        let mut options = Options::default();
+        assert_eq!(options.whitespace, Whitespace::Respect);
+        options.cycle_whitespace();
+        assert_eq!(options.whitespace, Whitespace::IgnoreChange);
+        options.cycle_whitespace();
+        assert_eq!(options.whitespace, Whitespace::IgnoreAll);
+        options.cycle_whitespace();
+        assert_eq!(options.whitespace, Whitespace::Respect);
+    }
 
     #[test]
     fn identical_files_produce_no_changes() {

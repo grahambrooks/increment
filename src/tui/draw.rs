@@ -10,12 +10,12 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph};
 
 use crate::model::RowKind;
 use crate::theme::marker;
 
-use super::keys::{FILE_HINTS, HINTS, NESTED_HINTS, REVIEW_HINTS};
+use super::keys::{FILE_HINTS, HELP, HINTS, NESTED_HINTS, REVIEW_HINTS};
 use super::review::{Mode, Pane, Review};
 use super::state::{App, Focus, Search};
 
@@ -62,6 +62,83 @@ pub fn diff_view(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
     draw_diff(frame, app, diff);
     draw_map(frame, app, map);
     draw_status(frame, app, status);
+
+    if app.showing_help() {
+        draw_help(frame, app, area);
+    }
+}
+
+/// The keys, and what the settings are set to.
+///
+/// Over the top of everything, because it is asked for and dismissed rather
+/// than lived in — and because a pane for it would take room from the diff on
+/// every frame to serve the frames it is not wanted on.
+///
+/// Each setting's current value sits beside the key that changes it rather than
+/// in a block of its own. That is shorter, which matters — a help panel that
+/// does not fit a 24-row terminal is not help — and it puts the answer next to
+/// the question.
+fn draw_help(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let render = app.render_options();
+    let diff = app.diff_options();
+
+    let value = |key: &str| -> Option<String> {
+        Some(match key {
+            "f" => if app.is_unfolded() {
+                "whole file"
+            } else {
+                "changed parts"
+            }
+            .to_owned(),
+            "x" => diff.whitespace_name().to_owned(),
+            "m" => on_off(diff.detect_moves),
+            "w" => match render.wrap {
+                crate::render::width::Wrap::Wrap => "wrapped".to_owned(),
+                crate::render::width::Wrap::Truncate => "truncated".to_owned(),
+            },
+            "s" => on_off(render.syntax_visible()),
+            "t" => render.palette_name().to_owned(),
+            "#" => on_off(render.line_numbers),
+            _ => return None,
+        })
+    };
+
+    let mut lines: Vec<Line<'_>> = Vec::new();
+    for (group, keys) in HELP {
+        lines.push(Line::from(Span::styled(
+            format!(" {group}"),
+            Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        )));
+        for (key, what) in *keys {
+            let mut spans = vec![
+                Span::styled(format!("  {key:<16}"), Style::new().fg(Color::Cyan)),
+                Span::raw(format!("{what:<30}")),
+            ];
+            if let Some(value) = value(key) {
+                spans.push(Span::styled(value, Style::new().fg(Color::Green)));
+            }
+            lines.push(Line::from(spans));
+        }
+    }
+
+    let width = 70u16.min(area.width.saturating_sub(2));
+    let height = (lines.len() as u16 + 2).min(area.height);
+    let panel = Rect {
+        x: area.x + area.width.saturating_sub(width) / 2,
+        y: area.y + area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    };
+
+    frame.render_widget(Clear, panel);
+    frame.render_widget(
+        Paragraph::new(lines).block(bordered(" keys — ? to close ", true)),
+        panel,
+    );
+}
+
+fn on_off(value: bool) -> String {
+    if value { "on" } else { "off" }.to_owned()
 }
 
 fn draw_files(frame: &mut Frame<'_>, app: &App, area: Rect) {

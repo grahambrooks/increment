@@ -21,4 +21,4 @@ expression: "draw(&mut app, 100, 20)"
 │let line38 = 38;                           │ 38   38 │let line38 = 38;                           ││
 │────────────────────────────────────── ⋯ 2 unchanged lines ──────────────────────────────────────││
 └─────────────────────────────────────────────────────────────────────────────────────────────────┘╌
-row 1/17  +0 -0 ~2  n/N change  [/] file  f fold  / search  q quit
+row 1/17  +0 -0 ~2  n/N change  [/] file  f whole file  / search  ? keys  q quit

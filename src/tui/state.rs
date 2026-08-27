@@ -10,9 +10,11 @@
 //! Every one of them is a unit test in this file.
 
 use std::cell::OnceCell;
+use std::rc::Rc;
 
+use crate::diff::Options as DiffOptions;
 use crate::highlight::Highlighting;
-use crate::model::{DiffDocument, RowKind};
+use crate::model::{DiffDocument, RowKind, SourceFile};
 use crate::render::Options;
 use crate::render::split::{VisualRow, compose};
 
@@ -77,10 +79,17 @@ pub struct Entry {
     /// cost more than everything else about loading a commit put together, so
     /// the first frame is drawn without it and it arrives on the next.
     highlighting: Lazy<Highlighting>,
+    /// The two files this was made from, and the settings that made it.
+    ///
+    /// Kept so the reader can change what a diff *is* — whether whitespace
+    /// counts, whether moves are detected — without going back to the shell.
+    /// A patch has no sources, so those settings are fixed for it, and the
+    /// browser says so rather than pretending.
+    sources: Option<Rc<(SourceFile, SourceFile)>>,
 }
 
 impl Entry {
-    /// An entry whose parts are already known.
+    /// An entry whose parts are already known, and which cannot be re-diffed.
     pub fn new(
         document: DiffDocument,
         unfolded: Option<DiffDocument>,
@@ -90,20 +99,48 @@ impl Entry {
             document,
             unfolded: Lazy::ready(unfolded),
             highlighting: Lazy::ready(highlighting),
+            sources: None,
         }
     }
 
-    /// An entry that computes its expensive parts when they are first wanted.
-    pub fn lazy(
-        document: DiffDocument,
-        unfolded: impl Fn() -> Option<DiffDocument> + 'static,
-        highlighting: impl Fn() -> Highlighting + 'static,
-    ) -> Self {
+    /// An entry that keeps its sources, and computes the expensive parts only
+    /// when something asks for them.
+    pub fn from_sources(old: SourceFile, new: SourceFile, options: DiffOptions) -> Self {
+        Self::rebuilt(Rc::new((old, new)), options)
+    }
+
+    fn rebuilt(sources: Rc<(SourceFile, SourceFile)>, options: DiffOptions) -> Self {
+        let document = crate::diff::compare(&sources.0, &sources.1, &options);
+
+        let whole = Rc::clone(&sources);
+        let colours = Rc::clone(&sources);
         Self {
             document,
-            unfolded: Lazy::deferred(unfolded),
-            highlighting: Lazy::deferred(highlighting),
+            unfolded: Lazy::deferred(move || {
+                Some(crate::diff::compare(
+                    &whole.0,
+                    &whole.1,
+                    &DiffOptions {
+                        context: None,
+                        ..options
+                    },
+                ))
+            }),
+            highlighting: Lazy::deferred(move || Highlighting::of(&colours.0, &colours.1)),
+            sources: Some(sources),
         }
+    }
+
+    /// The same two files, diffed differently. `None` without sources.
+    pub fn rediff(&self, options: DiffOptions) -> Option<Self> {
+        self.sources
+            .as_ref()
+            .map(|sources| Self::rebuilt(Rc::clone(sources), options))
+    }
+
+    /// Whether this entry can be diffed again with other settings.
+    pub fn can_rediff(&self) -> bool {
+        self.sources.is_some()
     }
 
     /// The unfolded document, computing it if this is the first ask.
@@ -174,6 +211,14 @@ pub enum Action {
     OpenFile,
     ToggleFold,
     ToggleFocus,
+    ToggleWrap,
+    ToggleSyntax,
+    ToggleLineNumbers,
+    CycleTheme,
+    /// Re-diffs: these change what the diff is, not how it is drawn.
+    CycleWhitespace,
+    ToggleMoves,
+    ToggleHelp,
     SearchStart,
     SearchType(char),
     SearchBackspace,
@@ -205,6 +250,10 @@ pub struct App {
     layout: Vec<VisualRow>,
     /// A one-shot note for the status line.
     notice: Option<String>,
+    /// The settings the entries were diffed with, so changing them can diff
+    /// again rather than reaching back into the shell.
+    diff_options: DiffOptions,
+    help: bool,
     /// Whether this view sits inside the review flow, where `q` goes back to
     /// the commit list rather than quitting. The status line has to say the
     /// right thing: a hint that names a key which does something else is worse
@@ -228,6 +277,8 @@ impl App {
             layout: Vec::new(),
             notice: None,
             nested: false,
+            diff_options: DiffOptions::default(),
+            help: false,
         };
         app.relayout();
         app
@@ -235,6 +286,52 @@ impl App {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    pub fn render_options(&self) -> Options {
+        self.options
+    }
+
+    pub fn diff_options(&self) -> DiffOptions {
+        self.diff_options
+    }
+
+    pub fn set_render_options(&mut self, options: Options) {
+        self.options = options;
+        self.relayout();
+    }
+
+    /// Diff every file again with new settings.
+    ///
+    /// Entries without sources — a patch — keep what they have, and the reader
+    /// is told, because a setting that silently applies to some files and not
+    /// others is worse than one that says where it stops.
+    pub fn set_diff_options(&mut self, options: DiffOptions) {
+        self.diff_options = options;
+
+        let mut fixed = 0usize;
+        for entry in &mut self.entries {
+            match entry.rediff(options) {
+                Some(rebuilt) => *entry = rebuilt,
+                None => fixed += 1,
+            }
+        }
+        if fixed > 0 {
+            self.notice = Some(format!(
+                "{fixed} file{} came from a patch and cannot be diffed again",
+                if fixed == 1 { "" } else { "s" }
+            ));
+        }
+        self.relayout();
+    }
+
+    pub fn showing_help(&self) -> bool {
+        self.help
+    }
+
+    /// Whether the whole file is on show rather than only the changed parts.
+    pub fn is_unfolded(&self) -> bool {
+        self.unfolded
     }
 
     /// Mark this view as living inside the review flow.
@@ -286,7 +383,7 @@ impl App {
     /// The event loop asks when no keypress is queued, so a commit draws
     /// immediately and gains colour a frame later instead of stalling on it.
     pub fn needs_colour(&self) -> bool {
-        self.entry().is_some_and(Entry::needs_colour)
+        self.options.syntax_visible() && self.entry().is_some_and(Entry::needs_colour)
     }
 
     /// Colour the file on show, and lay it out again with the result.
@@ -412,6 +509,33 @@ impl App {
             Action::NextFile => self.select(self.selected.saturating_add(1)),
             Action::PreviousFile => self.select(self.selected.saturating_sub(1)),
             Action::ToggleFold => self.toggle_fold(),
+            Action::ToggleWrap => {
+                self.options.toggle_wrap();
+                self.relayout();
+            }
+            Action::ToggleSyntax => {
+                self.options.toggle_syntax();
+                self.relayout();
+            }
+            Action::ToggleLineNumbers => {
+                self.options.toggle_line_numbers();
+                self.relayout();
+            }
+            Action::CycleTheme => {
+                self.options.cycle_theme();
+                self.relayout();
+            }
+            Action::CycleWhitespace => {
+                let mut options = self.diff_options;
+                options.cycle_whitespace();
+                self.set_diff_options(options);
+            }
+            Action::ToggleMoves => {
+                let mut options = self.diff_options;
+                options.toggle_moves();
+                self.set_diff_options(options);
+            }
+            Action::ToggleHelp => self.help = !self.help,
             // Choosing a file and then reading it are two steps, and this is
             // the second: the file list is behind you now.
             Action::OpenFile => self.focus = Focus::Diff,
@@ -504,7 +628,13 @@ impl App {
 
     fn relayout(&mut self) {
         self.layout = match (self.document(), self.entry()) {
-            (Some(document), Some(entry)) => compose(document, entry.colours(), &self.options),
+            // Colour is asked for only when the palette leaves room for it and
+            // the reader has not turned it off — so turning it off also stops
+            // it being computed, not just drawn.
+            (Some(document), Some(entry)) if self.options.syntax_visible() => {
+                compose(document, entry.colours(), &self.options)
+            }
+            (Some(document), _) => compose(document, &Highlighting::none(), &self.options),
             _ => Vec::new(),
         };
         // Any recorded match positions refer to the old layout.
@@ -639,38 +769,25 @@ mod tests {
     use super::*;
     use crate::diff::{Options as DiffOptions, compare};
     use crate::model::SourceFile;
-    use crate::theme::Theme;
 
     fn entry(old: &str, new: &str, context: Option<usize>) -> Entry {
-        let old = SourceFile::from_text("a/f.rs", old);
-        let new = SourceFile::from_text("b/f.rs", new);
-        Entry::new(
-            compare(
-                &old,
-                &new,
-                &DiffOptions {
-                    context,
-                    ..DiffOptions::default()
-                },
-            ),
-            Some(compare(
-                &old,
-                &new,
-                &DiffOptions {
-                    context: None,
-                    ..DiffOptions::default()
-                },
-            )),
-            Highlighting::none(),
+        Entry::from_sources(
+            SourceFile::from_text("a/f.rs", old),
+            SourceFile::from_text("b/f.rs", new),
+            DiffOptions {
+                context,
+                ..DiffOptions::default()
+            },
         )
     }
 
     fn options() -> Options {
-        Options {
-            theme: Theme::none(),
+        let mut options = Options {
             width: Some(100),
             ..Options::default()
-        }
+        };
+        options.set_palette(crate::theme::Palette::None);
+        options
     }
 
     /// Forty lines, with edits at 5 and 35.
@@ -1001,6 +1118,147 @@ mod tests {
         app.apply(Action::Quit);
         assert!(!app.should_quit());
         assert_eq!(*app.search(), Search::Off);
+    }
+
+    #[test]
+    fn wrapping_can_be_changed_while_reading() {
+        // A long line, in a narrow pane: wrapped it takes several visual rows,
+        // truncated it takes one.
+        let long_line = "word ".repeat(60);
+        let mut app = app(
+            vec![entry(
+                &format!("{long_line}\n"),
+                &format!("{long_line}x\n"),
+                None,
+            )],
+            10,
+        );
+        let wrapped = app.layout().len();
+
+        app.apply(Action::ToggleWrap);
+        let truncated = app.layout().len();
+        assert!(
+            truncated < wrapped,
+            "truncating should need fewer rows than wrapping: {truncated} vs {wrapped}"
+        );
+
+        app.apply(Action::ToggleWrap);
+        assert_eq!(app.layout().len(), wrapped);
+    }
+
+    #[test]
+    fn the_theme_cycles_and_the_settings_follow_it() {
+        let mut app = app(vec![long()], 10);
+        assert_eq!(app.render_options().palette_name(), "none");
+        app.apply(Action::CycleTheme);
+        assert_eq!(app.render_options().palette_name(), "dark");
+        app.apply(Action::CycleTheme);
+        assert_eq!(app.render_options().palette_name(), "ansi");
+    }
+
+    #[test]
+    fn syntax_colour_can_be_turned_off_and_stops_being_computed() {
+        let mut app = app(vec![long()], 10);
+        // The test palette is `none`, which has no room for syntax colour
+        // anyway — so nothing is owed.
+        assert!(!app.needs_colour());
+
+        app.apply(Action::CycleTheme);
+        assert_eq!(app.render_options().palette_name(), "dark");
+
+        app.apply(Action::ToggleSyntax);
+        assert!(
+            !app.needs_colour(),
+            "colour was turned off but is still being computed"
+        );
+    }
+
+    #[test]
+    fn line_numbers_can_be_turned_off() {
+        let mut app = app(vec![long()], 10);
+        assert!(app.render_options().line_numbers);
+        app.apply(Action::ToggleLineNumbers);
+        assert!(!app.render_options().line_numbers);
+    }
+
+    #[test]
+    fn ignoring_whitespace_at_runtime_re_diffs_the_files() {
+        // A reindentation and nothing else: it is a change until whitespace
+        // stops counting, and then it is not.
+        let mut app = app(
+            vec![entry(
+                "fn main() {\nlet x = 1;\n}\n",
+                "fn main() {\n    let x = 1;\n}\n",
+                None,
+            )],
+            10,
+        );
+        assert!(
+            app.document().is_some_and(DiffDocument::has_changes),
+            "indentation should be a change to begin with"
+        );
+
+        app.apply(Action::CycleWhitespace);
+        assert_eq!(app.diff_options().whitespace_name(), "ignore-change");
+        assert!(
+            !app.document().is_some_and(DiffDocument::has_changes),
+            "with whitespace ignored there is nothing left"
+        );
+    }
+
+    #[test]
+    fn move_detection_can_be_turned_off_while_reading() {
+        let helper =
+            "fn helper(value: u32) -> u32 {\n    let doubled = value * 2;\n    doubled + 1\n}\n";
+        let caller = "fn main() {\n    let answer = helper(1);\n    println!(\"hi\");\n}\n";
+        let mut app = app(
+            vec![entry(
+                &format!("{helper}{caller}"),
+                &format!("{caller}{helper}"),
+                None,
+            )],
+            10,
+        );
+        assert!(app.document().is_some_and(|d| d.stats.moved > 0));
+
+        app.apply(Action::ToggleMoves);
+        assert!(app.document().is_some_and(|d| d.stats.moved == 0));
+        assert!(app.document().is_some_and(|d| d.stats.added > 0));
+    }
+
+    #[test]
+    fn a_patch_cannot_be_re_diffed_and_says_so() {
+        // Entries built from a document alone have no files to diff again.
+        let mut app = App::new(
+            vec![Entry::new(
+                compare(
+                    &SourceFile::from_text("a/f.rs", "a\nb\n"),
+                    &SourceFile::from_text("b/f.rs", "a\nc\n"),
+                    &DiffOptions::default(),
+                ),
+                None,
+                Highlighting::none(),
+            )],
+            options(),
+        );
+        app.set_viewport(100, 10);
+
+        app.apply(Action::CycleWhitespace);
+        assert!(
+            app.notice().is_some_and(|note| note.contains("patch")),
+            "should say the setting could not be applied: {:?}",
+            app.notice()
+        );
+    }
+
+    #[test]
+    fn the_help_overlay_toggles() {
+        let mut app = app(vec![long()], 10);
+        assert!(!app.showing_help());
+        app.apply(Action::ToggleHelp);
+        assert!(app.showing_help());
+        app.apply(Action::ToggleHelp);
+        assert!(!app.showing_help());
     }
 
     #[test]

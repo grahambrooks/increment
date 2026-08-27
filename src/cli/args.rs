@@ -277,13 +277,17 @@ impl Args {
     }
 
     pub fn render_options(&self, terminal_width: Option<usize>) -> render::Options {
-        render::Options {
-            theme: theme::Theme::new(match self.theme {
-                Theme::Auto => theme::Palette::Auto,
-                Theme::Dark => theme::Palette::Dark,
-                Theme::Ansi => theme::Palette::Ansi,
-                Theme::None => theme::Palette::None,
-            }),
+        // `auto` is resolved here rather than carried, so that cycling themes at
+        // runtime starts from something concrete.
+        let palette = match self.theme {
+            Theme::Auto => theme::Palette::resolve_auto(),
+            Theme::Dark => theme::Palette::Dark,
+            Theme::Ansi => theme::Palette::Ansi,
+            Theme::None => theme::Palette::None,
+        };
+
+        let mut options = render::Options {
+            syntax: self.syntax_enabled_for(palette),
             tab_width: self.tab_width,
             wrap: match self.wrap {
                 WrapMode::Wrap => Wrap::Wrap,
@@ -292,7 +296,10 @@ impl Args {
             width: self.width.or(terminal_width),
             min_split_width: self.min_split_width,
             line_numbers: !self.no_line_numbers,
-        }
+            ..render::Options::default()
+        };
+        options.set_palette(palette);
+        options
     }
 
     pub fn view(&self) -> render::View {
@@ -316,6 +323,10 @@ impl Args {
             Syntax::Off => false,
             Syntax::Auto => theme.carries_change_in_background(),
         }
+    }
+
+    fn syntax_enabled_for(&self, palette: theme::Palette) -> bool {
+        self.syntax_enabled(&theme::Theme::new(palette))
     }
 
     pub fn color_choice(&self) -> anstream::ColorChoice {

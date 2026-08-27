@@ -25,4 +25,4 @@ expression: "draw_review(&mut review, 100, 24)"
 │let line34 = 34;                           │ 34   34 │let line34 = 34;                           ││
 │let line35 = 35;                           │ 35 ~ 35 │let line35 = 3500;                         ││
 └─────────────────────────────────────────────────────────────────────────────────────────────────┘╌
-row 1/17  +0 -0 ~2  n/N change  [/] file  f fold  / search  Tab log  q back
+1 file came from a patch and cannot be diffed again

@@ -1,0 +1,34 @@
+---
+source: tests/tui_layout.rs
+expression: "draw(&mut app, 110, 30)"
+---
+┌ files ───────────────────────┐┌ b/src/main.rs ────────────────────────────────────────────────────────────┐│
+│b/src/main.rs +0 -0 ~2        ││let line1 = 1;                  │  1    1 │let line1 = 1;                  ││
+│b/src/lib.rs +0 -0 ~2         ││let line2 = 2;                  │  2    2 │let line2 = 2;                  ││
+│                              ││let line3 = 3;                  │  3    3 │let line3 = 3;                  ││
+│                   ┌ keys — ? to close ─────────────────────────────────────────────────┐                  ││
+│                   │ moving                                                             │0;                ││
+│                   │  j / k           scroll, or choose a file                          │                  ││
+│                   │  Ctrl-f / Ctrl-b page                                              │                  │▐
+│                   │  g / G           top, bottom                                       │                  │▐
+│                   │  n / N           next, previous change — or search match           │──────────────────││
+│                   │  [ / ]           previous, next file                               │2;                ││
+│                   │  Tab             commits, file list, diff                          │3;                ││
+│                   │  /               search                                            │4;                ││
+│                   │ what is shown                                                      │500;              ││
+│                   │  f               showing                       changed parts       │6;                │╌
+│                   │  x               whitespace                    respect             │7;                │╌
+│                   │  m               moved blocks                  on                  │8;                ││
+│                   │ how it is drawn                                                    │──────────────────││
+│                   │  w               long lines                    wrapped             │                  ││
+│                   │  s               syntax colour                 off                 │                  ││
+│                   │  t               theme                         auto                │                  ││
+│                   │  #               line numbers                  on                  │                  │▐
+│                   │ leaving                                                            │                  │▐
+│                   │  q               back, or quit                                     │                  ││
+│                   │  Q               quit                                              │                  ││
+│                   └────────────────────────────────────────────────────────────────────┘                  ││
+│                              ││                                                                           ││
+│                              ││                                                                           ││
+└──────────────────────────────┘└───────────────────────────────────────────────────────────────────────────┘╌
+row 1/17  +0 -0 ~2  n/N change  [/] file  f whole file  / search  ? keys  q quit

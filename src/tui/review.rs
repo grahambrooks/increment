@@ -13,6 +13,7 @@
 //! about git either: diffs arrive through a [`Loader`], so the whole flow is
 //! testable against a handful of fabricated commits.
 
+use crate::diff::Options as DiffOptions;
 use crate::render::Options;
 use crate::source::git::Commit;
 
@@ -132,6 +133,9 @@ pub struct Review<'a> {
     notice: Option<String>,
     quit: bool,
     loading: bool,
+    /// Carried across commits so a setting changed in one applies to the next.
+    diff_options: DiffOptions,
+    help: bool,
     /// The selection moved and the diff has not caught up yet.
     ///
     /// Loading on the keystroke makes holding `j` unusable: every repeat waits
@@ -156,8 +160,20 @@ impl<'a> Review<'a> {
             notice: None,
             quit: false,
             loading: false,
+            diff_options: DiffOptions::default(),
+            help: false,
             pending: false,
         }
+    }
+
+    /// The diff settings new commits will be loaded with.
+    pub fn diff_options(&self) -> DiffOptions {
+        self.diff_options
+    }
+
+    pub fn set_diff_options(&mut self, options: DiffOptions) {
+        self.diff_options = options;
+        self.loaded = None;
     }
 
     pub fn items(&self) -> &[Item] {
@@ -257,9 +273,22 @@ impl<'a> Review<'a> {
             | Event::Top
             | Event::Bottom => self.move_by(&event),
             Event::Diff(action) => {
-                if let Some(diff) = self.diff.as_mut() {
-                    diff.apply(action);
+                let Some(diff) = self.diff.as_mut() else {
+                    return;
+                };
+                diff.apply(action);
+
+                // Settings belong to the reader, not to the commit they
+                // happened to be looking at. Without this, turning wrapping off
+                // would turn itself back on at the next commit.
+                self.options = diff.render_options();
+                if diff.diff_options() != self.diff_options {
+                    self.diff_options = diff.diff_options();
+                    // The commit on screen has been diffed again already; the
+                    // next one has to be loaded with the new settings.
+                    self.loaded = None;
                 }
+                self.help = diff.showing_help();
             }
         }
     }
@@ -383,6 +412,10 @@ impl<'a> Review<'a> {
                 let mut diff = App::new(entries, self.options);
                 diff.nest();
                 diff.set_focus(was);
+                diff.set_diff_options(self.diff_options);
+                if self.help {
+                    diff.apply(Action::ToggleHelp);
+                }
                 self.diff = Some(diff);
             }
             Err(error) => {

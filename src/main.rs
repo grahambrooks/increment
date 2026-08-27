@@ -132,7 +132,6 @@ fn review(
 
     let options = args.render_options(terminal_width());
     let diff_options = args.diff_options();
-    let syntax = args.syntax_enabled(&options.theme);
     let paths = paths.to_vec();
 
     // Each row is diffed when the reader reaches it, not up front: a branch of
@@ -149,35 +148,11 @@ fn review(
             .comparisons
             .iter()
             .map(|pair| {
-                let document = diff::compare(&pair.old, &pair.new, &diff_options);
-
-                // Both expensive parts wait until something asks for them: the
-                // unfolded document until `f` is pressed, and the colours until
-                // the frame after this file is first drawn. Doing either on load
-                // is what made opening a commit take a second or two.
-                let whole = (pair.old.clone(), pair.new.clone());
-                let colours = (pair.old.clone(), pair.new.clone());
-
-                tui::Entry::lazy(
-                    document,
-                    move || {
-                        Some(diff::compare(
-                            &whole.0,
-                            &whole.1,
-                            &diff::Options {
-                                context: None,
-                                ..diff_options
-                            },
-                        ))
-                    },
-                    move || {
-                        if syntax {
-                            Highlighting::of(&colours.0, &colours.1)
-                        } else {
-                            Highlighting::none()
-                        }
-                    },
-                )
+                // The entry keeps the two files, so the reader can change what
+                // the diff *is* — whitespace, move detection — without going
+                // back to the shell. Everything expensive about it still waits
+                // until something asks.
+                tui::Entry::from_sources(pair.old.clone(), pair.new.clone(), diff_options)
             })
             .collect())
     });
@@ -200,34 +175,12 @@ fn browse(
     let entries: Vec<tui::Entry> = documents
         .iter()
         .filter(|(document, _)| document.has_changes())
-        .map(|(document, pair)| {
-            let syntax = args.syntax_enabled(&options.theme);
-            let diff_options = args.diff_options();
-            // Both expensive parts wait until something asks. Unfolding also
-            // needs the sources, which a patch never had — so it resolves to
-            // `None` there rather than offering a key that does nothing.
-            let whole = pair.map(|pair| (pair.old.clone(), pair.new.clone()));
-            let colours = whole.clone();
-
-            tui::Entry::lazy(
-                document.clone(),
-                move || {
-                    whole.as_ref().map(|(old, new)| {
-                        diff::compare(
-                            old,
-                            new,
-                            &diff::Options {
-                                context: None,
-                                ..diff_options
-                            },
-                        )
-                    })
-                },
-                move || match &colours {
-                    Some((old, new)) if syntax => Highlighting::of(old, new),
-                    _ => Highlighting::none(),
-                },
-            )
+        .map(|(document, pair)| match pair {
+            Some(pair) => {
+                tui::Entry::from_sources(pair.old.clone(), pair.new.clone(), args.diff_options())
+            }
+            // A patch: no sources, so nothing to unfold, colour or re-diff.
+            None => tui::Entry::new(document.clone(), None, Highlighting::none()),
         })
         .collect();
 

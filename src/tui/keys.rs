@@ -44,6 +44,15 @@ pub fn action(key: KeyEvent, search: &Search) -> Option<Action> {
         (KeyCode::Char('[') | KeyCode::Char('K'), false) => Some(Action::PreviousFile),
 
         (KeyCode::Char('f'), false) => Some(Action::ToggleFold),
+        // Settings, changeable while reading. None of these collide with the
+        // navigation keys above, which is why they are the letters they are.
+        (KeyCode::Char('w'), false) => Some(Action::ToggleWrap),
+        (KeyCode::Char('s'), false) => Some(Action::ToggleSyntax),
+        (KeyCode::Char('t'), false) => Some(Action::CycleTheme),
+        (KeyCode::Char('#'), false) => Some(Action::ToggleLineNumbers),
+        (KeyCode::Char('x'), false) => Some(Action::CycleWhitespace),
+        (KeyCode::Char('m'), false) => Some(Action::ToggleMoves),
+        (KeyCode::Char('?'), false) => Some(Action::ToggleHelp),
         // Meaningful only with the file list focused, where it says "this one";
         // in the diff it is unbound rather than doing something surprising.
         (KeyCode::Enter, _) => Some(Action::OpenFile),
@@ -102,12 +111,49 @@ pub const REVIEW_HINTS: &[(&str, &str)] = &[
 ];
 
 /// The key hints for the status line, in the order they are shown.
+///
+/// Deliberately short. The settings keys are not here — there are seven of
+/// them, they would not fit, and `?` is what leads to them.
 pub const HINTS: &[(&str, &str)] = &[
     ("n/N", "change"),
     ("[/]", "file"),
-    ("f", "fold"),
+    ("f", "whole file"),
     ("/", "search"),
+    ("?", "keys"),
     ("q", "quit"),
+];
+
+/// Everything `?` lists, grouped as it is drawn.
+pub const HELP: &[(&str, &[(&str, &str)])] = &[
+    (
+        "moving",
+        &[
+            ("j / k", "scroll, or choose a file"),
+            ("Ctrl-f / Ctrl-b", "page"),
+            ("g / G", "top, bottom"),
+            ("n / N", "next, previous change — or search match"),
+            ("[ / ]", "previous, next file"),
+            ("Tab", "commits, file list, diff"),
+            ("/", "search"),
+        ],
+    ),
+    // These name the setting rather than describing it, because the panel
+    // shows each one's current value beside it — the value says what the
+    // choices are far better than a list of them in prose would.
+    (
+        "what is shown",
+        &[("f", "showing"), ("x", "whitespace"), ("m", "moved blocks")],
+    ),
+    (
+        "how it is drawn",
+        &[
+            ("w", "long lines"),
+            ("s", "syntax colour"),
+            ("t", "theme"),
+            ("#", "line numbers"),
+        ],
+    ),
+    ("leaving", &[("q", "back, or quit"), ("Q", "quit")]),
 ];
 
 /// The keys that mean something with the file list focused.
@@ -360,6 +406,60 @@ mod tests {
             assert!(
                 review_action(press(code), Pane::Log, &Search::Off).is_some(),
                 "the review offers {keys:?} for {what}, but it is not bound"
+            );
+        }
+    }
+
+    #[test]
+    fn every_key_the_help_lists_is_actually_bound() {
+        // The help is the only place most of these appear, so an unbound entry
+        // here is a promise nothing keeps.
+        for (group, keys) in HELP {
+            for (key, what) in *keys {
+                let first = key.chars().next().expect("a key");
+                let bound = match first {
+                    'C' => true, // Ctrl-f / Ctrl-b, checked below.
+                    'T' => action(press(KeyCode::Tab), &Search::Off).is_some(),
+                    c => {
+                        action(press(KeyCode::Char(c)), &Search::Off).is_some()
+                            || review_action(press(KeyCode::Char(c)), Pane::Log, &Search::Off)
+                                .is_some()
+                    }
+                };
+                assert!(bound, "{group}: {key:?} ({what}) is not bound");
+            }
+        }
+        assert_eq!(action(control('f'), &Search::Off), Some(Action::PageDown));
+        assert_eq!(action(control('b'), &Search::Off), Some(Action::PageUp));
+    }
+
+    #[test]
+    fn the_settings_keys_do_not_collide_with_the_navigation_keys() {
+        // Every letter that changes a setting must not already move something.
+        for (key, expected) in [
+            ('w', Action::ToggleWrap),
+            ('s', Action::ToggleSyntax),
+            ('t', Action::CycleTheme),
+            ('x', Action::CycleWhitespace),
+            ('m', Action::ToggleMoves),
+            ('?', Action::ToggleHelp),
+            ('#', Action::ToggleLineNumbers),
+        ] {
+            assert_eq!(
+                action(press(KeyCode::Char(key)), &Search::Off),
+                Some(expected),
+                "{key:?} does something else"
+            );
+        }
+    }
+
+    #[test]
+    fn settings_keys_are_letters_while_a_search_is_being_typed() {
+        let typing = Search::Typing(String::new());
+        for key in ['w', 's', 't', 'x', 'm', '?'] {
+            assert_eq!(
+                action(press(KeyCode::Char(key)), &typing),
+                Some(Action::SearchType(key))
             );
         }
     }

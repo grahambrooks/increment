@@ -418,3 +418,95 @@ fn the_file_list_in_a_review_can_be_focused() {
 
     insta::assert_snapshot!(draw_review(&mut review, 110, 24));
 }
+
+#[test]
+fn the_help_overlay_lists_the_keys_and_what_the_settings_are() {
+    let mut app = app(vec![long("src/main.rs"), long("src/lib.rs")]);
+    let _ = draw(&mut app, 110, 30);
+    app.apply(Action::ToggleHelp);
+    insta::assert_snapshot!(draw(&mut app, 110, 30));
+}
+
+#[test]
+fn the_help_overlay_follows_the_settings_it_reports() {
+    let mut app = app(vec![long("src/main.rs")]);
+    let _ = draw(&mut app, 110, 30);
+    app.apply(Action::ToggleHelp);
+
+    let before = draw(&mut app, 110, 30);
+    assert!(before.contains("wrapped"), "{before}");
+    assert!(before.contains("changed parts"), "{before}");
+
+    app.apply(Action::ToggleWrap);
+    app.apply(Action::ToggleFold);
+    let after = draw(&mut app, 110, 30);
+    assert!(after.contains("truncated"), "{after}");
+    assert!(after.contains("whole file"), "{after}");
+}
+
+#[test]
+fn settings_changed_in_one_commit_apply_to_the_next() {
+    // A setting belongs to the reader, not to the commit they happened to be
+    // looking at when they changed it.
+    let loader: Loader<'static> = Box::new(|_| Ok(vec![long("f.rs"), long("g.rs")]));
+    let mut review = Review::new(
+        vec![Item::from(commit(1, "one")), Item::from(commit(2, "two"))],
+        loader,
+        RenderOptions {
+            width: Some(110),
+            ..RenderOptions::default()
+        },
+    );
+    let _ = draw_review(&mut review, 110, 24);
+
+    review.apply(Event::Open);
+    review.apply(Event::Diff(Action::ToggleWrap));
+    let wrap = review.diff().expect("a diff").render_options().wrap;
+
+    // Move to the next commit and let it load.
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::Down);
+    review.settle();
+
+    assert_eq!(
+        review.diff().expect("a diff").render_options().wrap,
+        wrap,
+        "the setting did not survive the next commit"
+    );
+}
+
+#[test]
+fn a_diff_setting_changed_in_a_review_reloads_the_next_commit_with_it() {
+    let loader: Loader<'static> = Box::new(|_| Ok(vec![long("f.rs")]));
+    let mut review = Review::new(
+        vec![Item::from(commit(1, "one")), Item::from(commit(2, "two"))],
+        loader,
+        RenderOptions {
+            width: Some(110),
+            ..RenderOptions::default()
+        },
+    );
+    let _ = draw_review(&mut review, 110, 24);
+
+    review.apply(Event::Open);
+    review.apply(Event::Diff(Action::CycleWhitespace));
+    assert_eq!(review.diff_options().whitespace_name(), "ignore-change");
+
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::ToggleFocus);
+    review.apply(Event::Down);
+    review.settle();
+
+    assert_eq!(
+        review
+            .diff()
+            .expect("a diff")
+            .diff_options()
+            .whitespace_name(),
+        "ignore-change",
+        "the next commit was diffed with the old settings"
+    );
+}
