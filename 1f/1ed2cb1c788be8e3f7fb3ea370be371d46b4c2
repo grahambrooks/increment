@@ -1,0 +1,68 @@
+tests/rendering.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 17-21,117-118
+.github/workflows/build.yml
+  s_3c463378fb2c1d::t_c904c2aa2f0c97 17
+design/002-architecture-and-plan.md
+  s_3c463378fb2c1d::t_6a40e65c7526eb 7,92,107-108,160,173,210,219,235,248-249,284,286
+.github/render-formula.py
+  s_3c463378fb2c1d::t_fac223e4fd5457 2,17,53-55,74,81,88,91
+Cargo.toml
+  s_3c463378fb2c1d::t_c681e98a47ceeb 1,12,21-22,31,34-37,39
+src/lib.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 1
+src/main.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 1,12-18,26,246
+src/source/patch.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 12
+design/001-visual-diff-state-of-the-art.md
+  s_3c463378fb2c1d::t_6a40e65c7526eb 1,11,25,81,184
+tests/git_source.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 3,8,22,34,72-74,85,87,172,243,260,273,293,303,316,319,362
+Formula/README.md
+  s_3c463378fb2c1d::t_6a40e65c7526eb 3,9,12-13
+src/cli/args.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 16,33,256,357,361,411,465,472,508
+src/cli/surface.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 17,26
+src/tui/review.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 9
+CLAUDE.md
+  s_3c463378fb2c1d::t_0ac310ee12b945 1,7-14
+  s_3c463378fb2c1d::t_6a40e65c7526eb 34,37,61,69
+  s_3c463378fb2c1d::t_530d7eef8277c0 15
+design/003-review-flow.md
+  s_3c463378fb2c1d::t_6a40e65c7526eb 7,30,35,37,39,49,52,73,77,139,149,151,215
+Makefile
+  s_3c463378fb2c1d::t_6a40e65c7526eb 7,103
+tests/cli_contract.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 11-12,50,66,84,99,102,109,115,131,146,166
+  s_3c463378fb2c1d::t_c904c2aa2f0c97 24-25,179-182
+.github/workflows/release.yml
+  s_3c463378fb2c1d::t_fac223e4fd5457 1-2,4-10,84,86,96,98,110,117,153,169-170,179,187-188,201-202,208
+tests/tui_layout.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 11-16,66,184,213-214,251,290
+src/diff/engine.rs
+  s_3c463378fb2c1d::t_c681e98a47ceeb 18
+README.md
+  s_3c463378fb2c1d::t_57d49055bb9bcb 4,11-26
+  s_3c463378fb2c1d::t_6a40e65c7526eb 1,30,41-47,50,56-58,85,134,140,148,155,159,184
+  s_3c463378fb2c1d::t_2300a66aa8d8d0 27
+Cargo.lock
+  s_3c463378fb2c1d::t_48539e54ab36ad 1652-1671
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1f1ed2cb1c788be8e3f7fb3ea370be371d46b4c2",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
