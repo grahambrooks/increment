@@ -22,6 +22,7 @@ arrived. Detection is within a file; a block moved between files is not caught.
 
 ```sh
 gdiff old.rs new.rs              # two files; splits if the terminal is wide enough
+gdiff --whole-file old.rs new.rs # …showing every line, not just what changed
 gdiff git                        # HEAD against the working tree
 gdiff git HEAD~2                 # a revision against the working tree
 gdiff git main..feature          # one revision against another
@@ -77,7 +78,7 @@ changed across the whole file and where you are in it.
 | `g` `G`, `Home` `End` | top, bottom |
 | `n` `N` | next, previous change — or search match, when a search is active |
 | `]` `[` | next, previous file, without leaving the diff |
-| `f` | unfold, showing every line rather than the context |
+| `f` | show the whole file, or fold back to the changed parts |
 | `/` | search; `Enter` commits, `Esc` cancels |
 | `Tab` | move to the file list, then back to the diff |
 | `q`, `Esc`, `Ctrl-c` | quit |
@@ -125,7 +126,8 @@ full.
 |---|---|
 | `--view auto\|split\|unified` | `auto` splits at 120 columns or wider |
 | `--format text\|json` | |
-| `-U N`, `--full` | context lines either side of a change; `--full` folds nothing |
+| `--whole-file` | show the whole file, not only the parts that changed |
+| `-U N` | unchanged lines to keep either side of a change (default 3) |
 | `--wrap wrap\|truncate` | what to do with a line too wide for its pane |
 | `--theme auto\|dark\|ansi\|none` | `dark` tints backgrounds, `ansi` uses the sixteen colours |
 | `--syntax auto\|on\|off` | `auto` highlights only where the palette leaves the foreground free |

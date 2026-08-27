@@ -61,9 +61,19 @@ pub struct Args {
     )]
     pub context: usize,
 
-    /// Show every unchanged line instead of folding.
-    #[arg(long, conflicts_with = "context", global = true)]
-    pub full: bool,
+    // Named after what it is for rather than after what it switches off:
+    // `--full` describes the mechanism, and someone looking for "show me the
+    // whole file" does not find it under a word about folding. The old spelling
+    // stays as an alias — renaming a flag out from under a script is not worth
+    // the tidiness.
+    /// Show the whole file, not only the parts that changed.
+    #[arg(
+        long = "whole-file",
+        visible_alias = "full",
+        conflicts_with = "context",
+        global = true
+    )]
+    pub whole_file: bool,
 
     /// What to do with a line too wide for its pane.
     #[arg(long, value_enum, default_value_t = WrapMode::Wrap, global = true)]
@@ -254,7 +264,7 @@ impl Args {
                 Algorithm::Histogram => diff::Algorithm::Histogram,
                 Algorithm::Myers => diff::Algorithm::Myers,
             },
-            context: (!self.full).then_some(self.context),
+            context: (!self.whole_file).then_some(self.context),
             whitespace: if self.ignore_all_space {
                 diff::Whitespace::IgnoreAll
             } else if self.ignore_space_change {
@@ -359,9 +369,16 @@ mod tests {
     }
 
     #[test]
-    fn context_defaults_to_three_and_full_turns_folding_off() {
+    fn context_defaults_to_three_and_the_whole_file_turns_folding_off() {
         assert_eq!(parse(&[]).diff_options().context, Some(3));
         assert_eq!(parse(&["-U", "7"]).diff_options().context, Some(7));
+        assert_eq!(parse(&["--whole-file"]).diff_options().context, None);
+    }
+
+    #[test]
+    fn full_still_works_as_a_name_for_the_whole_file() {
+        // Renaming a flag someone has already put in a script is not worth the
+        // tidiness; the old spelling stays, and both appear in `--help`.
         assert_eq!(parse(&["--full"]).diff_options().context, None);
     }
 

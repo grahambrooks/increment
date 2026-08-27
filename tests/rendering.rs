@@ -140,3 +140,67 @@ fn the_browser_and_the_pager_lay_out_identically() {
 
     assert_eq!(text(app.layout()), text(&composed));
 }
+
+/// What `--whole-file` promises: the whole file, not a wider window onto it.
+///
+/// The alignment property test guarantees this of `align`; this pins it end to
+/// end, through folding and the split renderer, which is where the flag
+/// actually has to hold.
+#[test]
+fn the_whole_file_view_shows_every_line_of_both_sides() {
+    let old = SourceFile::from_text("a/catalog.rs", OLD);
+    let new = SourceFile::from_text("b/catalog.rs", NEW);
+
+    let whole = draw(
+        &diff::compare(
+            &old,
+            &new,
+            &DiffOptions {
+                context: None,
+                ..DiffOptions::default()
+            },
+        ),
+        View::Split,
+        Some(200),
+        Wrap::Wrap,
+    );
+
+    for (index, line) in old.lines.iter().enumerate() {
+        assert!(
+            whole.contains(line.trim()),
+            "old line {} is missing: {line:?}",
+            index + 1
+        );
+    }
+    for (index, line) in new.lines.iter().enumerate() {
+        assert!(
+            whole.contains(line.trim()),
+            "new line {} is missing: {line:?}",
+            index + 1
+        );
+    }
+
+    // And nothing is folded away, because there is nothing left to fold.
+    assert!(
+        !whole.contains("unchanged line"),
+        "the whole-file view still folded something:\n{whole}"
+    );
+}
+
+/// The contrast: folding is still the default, and still hides things.
+#[test]
+fn the_default_view_folds_and_says_how_much_it_hid() {
+    let folded = draw(&fixture(Some(3)), View::Split, Some(200), Wrap::Wrap);
+    assert!(folded.contains("unchanged lines"), "{folded}");
+
+    let old = SourceFile::from_text("a/catalog.rs", OLD);
+    let hidden = old
+        .lines
+        .iter()
+        .filter(|line| !folded.contains(line.trim()) && !line.trim().is_empty())
+        .count();
+    assert!(
+        hidden > 0,
+        "folding hid nothing, so the fixture proves nothing"
+    );
+}
