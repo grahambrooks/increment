@@ -1,0 +1,71 @@
+src/main.rs
+  s_3c463378fb2c1d::t_db8b3c3fd477af 151-155,178-183
+src/diff/mod.rs
+  s_3c463378fb2c1d::t_cf4f68d8f506d0 30
+  s_3c463378fb2c1d::t_4ab8b44c8c7c73 54-81,103-113
+  s_3c463378fb2c1d::t_a715691e3ca4e5 114
+src/tui/state.rs
+  s_3c463378fb2c1d::t_9dde7a04709b3d 214-221,253-256,280-281,291-331,386,512-538,631-637
+  s_3c463378fb2c1d::t_bdd4a1eed50a99 144,774-780,1123-1262
+  s_3c463378fb2c1d::t_f73af996acf61c 332-336
+  s_3c463378fb2c1d::t_636e8fc6624528 785,788-790
+  s_3c463378fb2c1d::t_d4e3663d07d7e5 13,15,17,82-88,92,102,106-116,119-130,134-143
+  s_3c463378fb2c1d::t_593e38fd691cd4 145,1263
+tests/tui_layout.rs
+  s_3c463378fb2c1d::t_e925af2daff2ce 444
+  s_3c463378fb2c1d::t_80e37980b7222e 421-443,445-512
+src/tui/draw.rs
+  s_3c463378fb2c1d::t_c518956e0d1739 76-80,85-105,113,116-120,124,127-128,135
+  s_3c463378fb2c1d::t_f73af996acf61c 13,18,65-75,81-84,106-112,114,121-123,125-126,129-134,136-141
+  s_3c463378fb2c1d::t_c9583e650d065b 115
+src/tui/review.rs
+  s_3c463378fb2c1d::t_720ce741c3f65a 16,136-138,163-164,169-178,276-289,291,415-418
+src/theme/mod.rs
+  s_3c463378fb2c1d::t_3660f05e0689cc 56-70,74
+src/render/mod.rs
+  s_3c463378fb2c1d::t_ce5e49b4ee87dd 20,28,32,44-48,55,61,66-71,78-94,96-100,102-119
+  s_3c463378fb2c1d::t_4ab8b44c8c7c73 120,194-195,198-209,212-218,220-223
+  s_3c463378fb2c1d::t_636e8fc6624528 29-31,72-77,95,101,180-192,196-197,210-211,219
+  s_3c463378fb2c1d::t_8929061b2cf2b0 121-122,193
+src/tui/keys.rs
+  s_3c463378fb2c1d::t_db23a71cf36cb6 47-55,114-116,120,122,126-139,143-144,146-149,151,153-158,413-422,428-465
+  s_3c463378fb2c1d::t_c9583e650d065b 140-142,145,150,152
+  s_3c463378fb2c1d::t_cf4f68d8f506d0 423-427
+  s_3c463378fb2c1d::t_10965e00344ffc 466
+src/cli/args.rs
+  s_3c463378fb2c1d::t_636e8fc6624528 289,299-302
+  s_3c463378fb2c1d::t_3660f05e0689cc 280-288,290,328-329
+  s_3c463378fb2c1d::t_146841d2f5a1b2 330-331
+README.md
+  s_3c463378fb2c1d::t_c9f233e0d21d91 84,87-105
+design/003-review-flow.md
+  s_3c463378fb2c1d::t_026f80eb83cf7d 175-208
+tests/snapshots/tui_layout__one_file_hides_the_file_list.snap
+  s_3c463378fb2c1d::t_bbf35141aee1ab 24
+tests/snapshots/tui_layout__opening_a_commit_splits_the_view.snap
+  s_3c463378fb2c1d::t_f462b487ac7b11 28
+tests/snapshots/tui_layout__scrolled_to_a_change.snap
+  s_3c463378fb2c1d::t_aaba779776b6f9 20
+tests/snapshots/tui_layout__several_files_show_the_list.snap
+  s_3c463378fb2c1d::t_6a172e1cbbcf31 24
+tests/snapshots/tui_layout__the_file_list_in_a_review_can_be_focused.snap
+  s_3c463378fb2c1d::t_b73b940755532d 28
+tests/snapshots/tui_layout__the_help_overlay_lists_the_keys_and_what_the_settings_are.snap
+  s_3c463378fb2c1d::t_7cd9275f2e6b9c 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "17b680a82d4ad79655daf825ab9c6a0454fcc575",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
