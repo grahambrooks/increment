@@ -52,12 +52,39 @@ pub struct Commit {
     pub date: String,
 }
 
-/// Walk the history named by a `git log`-style spec.
+/// Walk the history named by a `git log`-style spec, collecting every commit.
+///
+/// Convenient, and the wrong thing for a large repository — see [`log_each`],
+/// which this wraps.
+pub fn log(spec: Option<&str>, limit: Option<usize>) -> Result<Vec<Commit>, Error> {
+    let mut commits = Vec::new();
+    log_each(spec, limit, |batch| {
+        commits.extend(batch);
+        std::ops::ControlFlow::Continue(())
+    })?;
+    Ok(commits)
+}
+
+/// How many commits to hand over at a time.
+///
+/// Small enough that the first commits appear immediately, large enough that a
+/// hundred thousand of them do not become a hundred thousand handovers.
+const BATCH: usize = 128;
+
+/// Walk the history named by a `git log`-style spec, a batch at a time.
 ///
 /// `a..b` walks `b` and stops at `a`; a bare revision walks from there; nothing
 /// walks from `HEAD`. Newest first, as `git log` does — a review starts at the
 /// top of the branch.
-pub fn log(spec: Option<&str>, limit: Option<usize>) -> Result<Vec<Commit>, Error> {
+///
+/// Batched rather than returning a `Vec` because a reader looking at the first
+/// screen of commits should not be waiting on the fifty thousandth. `batch`
+/// returns [`ControlFlow::Break`] to stop the walk.
+pub fn log_each(
+    spec: Option<&str>,
+    limit: Option<usize>,
+    mut batch: impl FnMut(Vec<Commit>) -> std::ops::ControlFlow<()>,
+) -> Result<(), Error> {
     let repo = gix::discover(".").map_err(|error| Error::NotARepository(error.to_string()))?;
 
     let (tip, hidden) = match spec.and_then(split_range) {
@@ -89,9 +116,10 @@ pub fn log(spec: Option<&str>, limit: Option<usize>) -> Result<Vec<Commit>, Erro
 
     let walk = walk.all().map_err(|error| Error::Read(error.to_string()))?;
 
-    let mut commits = Vec::new();
+    let mut pending: Vec<Commit> = Vec::with_capacity(BATCH);
+    let mut sent = 0usize;
     for info in walk {
-        if limit.is_some_and(|limit| commits.len() >= limit) {
+        if limit.is_some_and(|limit| sent + pending.len() >= limit) {
             break;
         }
         let info = info.map_err(|error| Error::Read(error.to_string()))?;
@@ -122,19 +150,34 @@ pub fn log(spec: Option<&str>, limit: Option<usize>) -> Result<Vec<Commit>, Erro
             .map(|text| text.split_whitespace().next().unwrap_or(&text).to_owned())
             .unwrap_or_default();
 
-        commits.push(Commit {
-            short_id: object
-                .short_id()
-                .map(|id| id.to_string())
-                .unwrap_or_else(|_| info.id.to_string()),
+        pending.push(Commit {
+            // A plain seven-character prefix, not git's shortest *unique*
+            // abbreviation. Computing uniqueness means asking the object
+            // database about every commit, which cost more than the whole rest
+            // of the walk put together. This is a label; the full id below is
+            // what anything actually resolves.
+            short_id: info.id.to_string().chars().take(7).collect(),
             id: info.id.to_string(),
             summary,
             author,
             date,
         });
+
+        if pending.len() >= BATCH {
+            sent += pending.len();
+            if batch(std::mem::take(&mut pending)).is_break() {
+                return Ok(());
+            }
+            pending.reserve(BATCH);
+        }
     }
 
-    Ok(commits)
+    if !pending.is_empty() {
+        // Nothing follows, so a request to stop has nothing left to stop.
+        let _ = batch(pending);
+    }
+
+    Ok(())
 }
 
 /// The diff a single commit introduced: its first parent against itself.

@@ -211,7 +211,7 @@ fn the_change_map_marks_where_the_reader_is() {
 // ---------------------------------------------------------------------------
 
 use gdiff::source::git::Commit;
-use gdiff::tui::review::{Event, Loader, Review};
+use gdiff::tui::review::{Event, Item, Loader, Review};
 
 fn commit(n: usize, summary: &str) -> Commit {
     Commit {
@@ -224,13 +224,16 @@ fn commit(n: usize, summary: &str) -> Commit {
 }
 
 fn review() -> Review<'static> {
-    let commits = vec![
+    let commits: Vec<Item> = vec![
         commit(0x3f2a1c9, "Phase 5: move detection and whitespace modes"),
         commit(0x10f4df2, "Phase 4: the interactive browser"),
         commit(0x5ab2f81, "Phase 3: git integration"),
         commit(0x47763dd, "Phases 1 and 2: the aligned split view"),
         commit(0x039c984, "Phase 0: scaffold"),
-    ];
+    ]
+    .into_iter()
+    .map(Item::from)
+    .collect();
     let loader: Loader<'static> = Box::new(|_| Ok(vec![long("src/diff/moves.rs")]));
     Review::new(
         commits,
@@ -306,6 +309,32 @@ fn a_narrow_review_still_draws() {
         let drawn = draw_review(&mut review, width, height);
         assert!(!drawn.is_empty(), "{width}x{height} drew nothing");
     }
+}
+
+#[test]
+fn the_working_tree_sits_at_the_top_of_the_list() {
+    let mut items = vec![Item::Worktree];
+    items.push(Item::from(commit(0x3f2a1c9, "Phase 5: move detection")));
+    let loader: Loader<'static> = Box::new(|_| Ok(vec![long("f.rs")]));
+    let mut review = Review::new(
+        items,
+        loader,
+        RenderOptions {
+            theme: Theme::none(),
+            ..RenderOptions::default()
+        },
+    );
+    insta::assert_snapshot!(draw_review(&mut review, 90, 8));
+}
+
+#[test]
+fn a_loading_history_says_so_in_the_title() {
+    // The count moves while a large history is walked; a number that quietly
+    // changes under the reader is worse than one that says it is still coming.
+    let mut review = review();
+    review.set_loading(true);
+    let drawn = draw_review(&mut review, 90, 8);
+    assert!(drawn.contains("loading"), "{drawn}");
 }
 
 #[test]

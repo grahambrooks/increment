@@ -14,13 +14,14 @@ pub mod review;
 pub mod state;
 
 use std::io::IsTerminal;
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 use ratatui::crossterm::event::{self, Event};
 
 use crate::render::Options;
-use crate::source::git::Commit;
 
-pub use review::{Loader, Review};
+pub use review::{Item, Loader, Review};
 pub use state::{Action, App, Entry};
 
 /// Run the browser until the reader quits.
@@ -41,27 +42,63 @@ pub fn run(entries: Vec<Entry>, options: Options) -> std::io::Result<()> {
     result
 }
 
+/// Rows still arriving from a background walk of the history.
+///
+/// `Err` ends the stream with a message; `Ok` is a batch to append.
+pub type Incoming = Receiver<Result<Vec<Item>, String>>;
+
 /// Run the review flow — a commit list, with each commit's diff below it.
-pub fn review(commits: Vec<Commit>, loader: Loader<'_>, options: Options) -> std::io::Result<()> {
+///
+/// `incoming` carries rows found after the first frame, so a long history shows
+/// its first screen immediately instead of after the walk finishes. Pass `None`
+/// when everything is already in `items`.
+pub fn review(
+    items: Vec<Item>,
+    incoming: Option<Incoming>,
+    loader: Loader<'_>,
+    options: Options,
+) -> std::io::Result<()> {
     if !std::io::stdout().is_terminal() {
         return Err(std::io::Error::other(
             "the interactive browser needs a terminal",
         ));
     }
 
-    let mut review = Review::new(commits, loader, options);
+    let mut review = Review::new(items, loader, options);
+    review.set_loading(incoming.is_some());
+
     let mut terminal = ratatui::init();
-    let result = review_loop(&mut terminal, &mut review);
+    let result = review_loop(&mut terminal, &mut review, incoming.as_ref());
     ratatui::restore();
     result
 }
 
+/// How long to wait for a key before looking at the world again.
+///
+/// Only used while there is something to look at — rows arriving, or a deferred
+/// diff to load. Otherwise the loop blocks, so an idle browser costs nothing.
+const TICK: Duration = Duration::from_millis(30);
+
 fn review_loop(
     terminal: &mut ratatui::DefaultTerminal,
     review: &mut Review<'_>,
+    incoming: Option<&Incoming>,
 ) -> std::io::Result<()> {
     while !review.should_quit() {
         terminal.draw(|frame| draw::review(frame, review))?;
+
+        // A deferred diff, done only when the reader has stopped moving. Holding
+        // `j` down the log stays instant; the diff catches up on the pause.
+        if review.needs_settle() && !event::poll(Duration::ZERO)? {
+            review.settle();
+            continue;
+        }
+
+        let busy = review.loading() || review.needs_settle();
+        if busy && !event::poll(TICK)? {
+            drain(review, incoming);
+            continue;
+        }
 
         if let Event::Key(key) = event::read()?
             && key.kind == event::KeyEventKind::Press
@@ -73,8 +110,32 @@ fn review_loop(
                 review.apply(event);
             }
         }
+        drain(review, incoming);
     }
     Ok(())
+}
+
+/// Take whatever the background walk has produced since the last look.
+fn drain(review: &mut Review<'_>, incoming: Option<&Incoming>) {
+    let Some(incoming) = incoming else {
+        return;
+    };
+    loop {
+        match incoming.try_recv() {
+            Ok(Ok(batch)) => review.extend(batch),
+            Ok(Err(message)) => {
+                review.report(message);
+                review.set_loading(false);
+                return;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            // The walk finished and dropped its end.
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                review.set_loading(false);
+                return;
+            }
+        }
+    }
 }
 
 fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> std::io::Result<()> {

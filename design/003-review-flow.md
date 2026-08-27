@@ -1,6 +1,6 @@
 # 003 — A tig-shaped review flow
 
-Status: **6a and 6b built (2026-08-26)**; 6c and 6d outstanding · Follows: `002-architecture-and-plan.md`
+Status: **6a–6d built (2026-08-26)** · Follows: `002-architecture-and-plan.md`
 
 Phases 0–5 built a diff *visualiser*: point it at two files or a revision and it draws them well.
 What it cannot do is the thing you actually sit down to do — **work through a branch, commit by
@@ -107,13 +107,42 @@ This is also the first place the `regex-fancy` trade-off shows up in a number: t
 engine is materially slower than the `onig` it was chosen over. Still the right call — a C
 toolchain in every build costs more than 60ms a file — but worth knowing it is not free.
 
-### 6c — scale
-Incremental log loading with a progress indication; diffing the selected commit off the draw
-path; `--limit`.
+### 6c — scale — **done**
+The history is walked on a background thread and appended as it arrives; the selected commit is
+diffed when the reader *stops*, not on the keystroke.
 
-### 6d — the working tree as a row
-An "uncommitted changes" entry at the top of the log, opening `gdiff git`. Small, and it is what
-makes the tool usable mid-work rather than only after committing.
+Measured on a synthetic 20,000-commit repository:
+
+| | before | after |
+|---|---|---|
+| first frame | 688 ms | **7 ms** |
+| whole walk | 688 ms | 108 ms |
+
+Two separate findings behind those numbers:
+
+- **Streaming is what fixes the first frame.** 688 ms of blank terminal before anything appeared;
+  now the first batch of 128 commits lands in single-digit milliseconds and the rest fill in
+  behind it. The list title says `loading…` while they do, because a count that silently changes
+  under the reader is worse than one that admits it is still coming.
+- **`short_id()` was six sevenths of the walk.** gix computes git's shortest *unique*
+  abbreviation, which means asking the object database about every commit — 688 ms against git's
+  own 80 ms for the same history. A plain seven-character prefix brings it to 108 ms, comparable
+  to git. The trade is that a prefix could in principle be ambiguous; it is a display label, and
+  the full id is what anything actually resolves.
+- **Diff loading is deferred rather than threaded.** Holding `j` down the log used to wait for a
+  whole commit to be diffed on every repeat. It is now marked pending and done when no keypress
+  is queued, so scrolling stays instant and the diff catches up on the pause. A thread would have
+  meant making the loader and every `Entry` `Send`, for a problem that turned out to be about
+  *when* rather than *where*.
+
+### 6d — the working tree as a row — **done**
+An "uncommitted changes" row at the top of the list, marked `•`, opening the same view `gdiff
+git` shows. Present whenever no explicit range was named — reviewing "this branch" nearly always
+means reviewing what is not committed yet as well.
+
+The list is therefore `Item`s rather than commits, and the loader takes an `Item`. That is what
+keeps the working tree from being a special case threaded through every function that touches the
+list.
 
 ## 5. The decision, taken
 

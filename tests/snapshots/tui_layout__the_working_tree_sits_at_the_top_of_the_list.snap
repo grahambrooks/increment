@@ -1,0 +1,12 @@
+---
+source: tests/tui_layout.rs
+expression: "draw_review(&mut review, 90, 8)"
+---
+┌ 1 commit ──────────────────────────────────────────────────────────────────────────────┐
+│•                    uncommitted changes                                                │
+│3f2a1c9  2026-08-26  Phase 5: move detection                                            │
+│                                                                                        │
+│                                                                                        │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+1/2  ↵ open  j/k move  Tab focus  q quit

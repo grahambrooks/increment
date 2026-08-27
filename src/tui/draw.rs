@@ -376,12 +376,27 @@ pub fn review(frame: &mut Frame<'_>, review: &mut Review<'_>) {
 
 fn draw_commits(frame: &mut Frame<'_>, review: &Review<'_>, area: Rect) {
     let focused = review.focus() == Pane::Log;
-    let title = format!(" {} commits ", review.commits().len());
+    // Count commits, not rows: the working tree is in the list but is not one
+    // of them, and saying "2 commits" over one commit is a small lie.
+    //
+    // The count also moves while a large history loads, and saying so beats a
+    // number that quietly changes under the reader.
+    let commits = review
+        .items()
+        .iter()
+        .filter(|item| !item.is_worktree())
+        .count();
+    let plural = if commits == 1 { "commit" } else { "commits" };
+    let title = if review.loading() {
+        format!(" {commits} {plural}, loading… ")
+    } else {
+        format!(" {commits} {plural} ")
+    };
     let block = bordered(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    if review.commits().is_empty() {
+    if review.items().is_empty() {
         frame.render_widget(Paragraph::new("no commits"), inner);
         return;
     }
@@ -394,17 +409,27 @@ fn draw_commits(frame: &mut Frame<'_>, review: &Review<'_>, area: Rect) {
     let rows: Vec<Line<'_>> = review
         .visible()
         .map(|index| {
-            let commit = &review.commits()[index];
+            let item = &review.items()[index];
             let selected = index == review.selected();
+            // The working tree gets its own colour: it is the row whose content
+            // changes under you, and it is not a commit.
+            let id_style = if item.is_worktree() {
+                Style::new().fg(Color::Magenta)
+            } else {
+                Style::new().fg(Color::Yellow)
+            };
             let spans = vec![
                 Span::styled(
-                    commit.short_id.chars().take(7).collect::<String>(),
-                    Style::new().fg(Color::Yellow),
+                    format!("{:<7}", item.short_id().chars().take(7).collect::<String>()),
+                    id_style,
                 ),
                 Span::raw("  "),
-                Span::styled(commit.date.clone(), Style::new().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{:<10}", item.date()),
+                    Style::new().fg(Color::DarkGray),
+                ),
                 Span::raw("  "),
-                Span::raw(clip(&commit.summary, summary_width)),
+                Span::raw(clip(item.summary(), summary_width)),
             ];
             let line = Line::from(spans);
             if selected {
@@ -425,10 +450,10 @@ fn draw_review_status(frame: &mut Frame<'_>, review: &Review<'_>, area: Rect) {
             Style::new().fg(Color::Yellow),
         )),
         None => {
-            let position = if review.commits().is_empty() {
+            let position = if review.items().is_empty() {
                 "no commits".to_owned()
             } else {
-                format!("{}/{}", review.selected() + 1, review.commits().len())
+                format!("{}/{}", review.selected() + 1, review.items().len())
             };
             let hints = REVIEW_HINTS
                 .iter()

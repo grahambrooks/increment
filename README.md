@@ -40,9 +40,14 @@ gdiff review main..feature       # a range
 gdiff review --limit 500 HEAD    # …further back
 ```
 
-A commit list; `Enter` opens what that commit did in the split view below it, and moving the
-selection with the split open follows it. `q` closes a view and returns to the list; only the
-list itself quits. `Q` quits from anywhere.
+A commit list with the working tree at the top of it; `Enter` opens what that
+commit did in the split view below, and moving the selection with the split open
+follows it. `q` closes a view and returns to the list; only the list itself
+quits. `Q` quits from anywhere.
+
+The history is walked in the background, so a long branch shows its first screen
+immediately rather than after the walk. The diff loads when you stop moving, so
+holding `j` down the log stays instant.
 
 | Key | |
 |---|---|

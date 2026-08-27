@@ -103,20 +103,48 @@ fn review(
         return Err(surface::NotATerminal.to_string());
     }
 
-    let commits = source::git::log(rev, Some(limit)).map_err(|error| error.to_string())?;
-    if commits.is_empty() {
-        return Ok(exit::SUCCESS);
+    // The working tree is the top row when no range was named — reviewing "this
+    // branch" almost always means reviewing what is not committed yet as well.
+    let mut items: Vec<tui::Item> = Vec::new();
+    if rev.is_none() || rev.is_some_and(|rev| !rev.contains("..")) {
+        items.push(tui::Item::Worktree);
     }
+
+    // The history is walked on another thread and appended as it arrives, so
+    // the first screen of a fifty-thousand-commit branch shows immediately
+    // rather than after the walk.
+    let (sender, incoming) = std::sync::mpsc::channel();
+    let spec = rev.map(str::to_owned);
+    std::thread::spawn(move || {
+        let sent = source::git::log_each(spec.as_deref(), Some(limit), |batch| {
+            let batch: Vec<tui::Item> = batch.into_iter().map(tui::Item::from).collect();
+            // The reader quit: stop walking rather than filling a channel
+            // nobody is reading.
+            match sender.send(Ok(batch)) {
+                Ok(()) => std::ops::ControlFlow::Continue(()),
+                Err(_) => std::ops::ControlFlow::Break(()),
+            }
+        });
+        if let Err(error) = sent {
+            let _ = sender.send(Err(error.to_string()));
+        }
+    });
 
     let options = args.render_options(terminal_width());
     let diff_options = args.diff_options();
     let syntax = args.syntax_enabled(&options.theme);
+    let paths = paths.to_vec();
 
-    // Each commit is diffed when the reader reaches it, not up front: a branch
-    // of two hundred commits would otherwise mean two hundred diffs before the
+    // Each row is diffed when the reader reaches it, not up front: a branch of
+    // two hundred commits would otherwise mean two hundred diffs before the
     // first frame.
-    let loader: tui::Loader<'_> = Box::new(move |commit| {
-        let changes = source::git::commit(&commit.id, paths).map_err(|error| error.to_string())?;
+    let loader: tui::Loader<'_> = Box::new(move |item| {
+        let changes = match item {
+            tui::Item::Worktree => source::git::compare(None, &paths),
+            tui::Item::Commit(commit) => source::git::commit(&commit.id, &paths),
+        }
+        .map_err(|error| error.to_string())?;
+
         Ok(changes
             .comparisons
             .iter()
@@ -130,10 +158,6 @@ fn review(
                         ..diff_options
                     },
                 );
-                // Highlighting is deferred to the moment this file is drawn.
-                // A commit changing twenty files shows one at a time, and
-                // parsing the other nineteen costs about a second of dead
-                // terminal for nothing.
                 let (old, new) = (pair.old.clone(), pair.new.clone());
                 tui::Entry::lazy(document, Some(unfolded), move || {
                     if syntax {
@@ -146,7 +170,7 @@ fn review(
             .collect())
     });
 
-    tui::review(commits, loader, options).map_err(|error| error.to_string())?;
+    tui::review(items, Some(incoming), loader, options).map_err(|error| error.to_string())?;
     Ok(exit::SUCCESS)
 }
 

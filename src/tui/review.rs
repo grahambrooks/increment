@@ -18,11 +18,67 @@ use crate::source::git::Commit;
 
 use super::state::{Action, App, Entry};
 
-/// Turns a commit into the files it changed.
+/// A row of the review list.
+///
+/// The working tree is a row like any other, at the top. That is what makes the
+/// tool usable in the middle of doing the work rather than only after
+/// committing it — the state you most often want to look at is the one you have
+/// not committed yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Item {
+    /// Everything not yet committed: `HEAD` against the working tree.
+    Worktree,
+    Commit(Commit),
+}
+
+impl Item {
+    /// What identifies this row to a loader.
+    pub fn key(&self) -> &str {
+        match self {
+            // Not a valid object id, deliberately: nothing should try to
+            // resolve it as one.
+            Self::Worktree => "<worktree>",
+            Self::Commit(commit) => &commit.id,
+        }
+    }
+
+    pub fn short_id(&self) -> &str {
+        match self {
+            Self::Worktree => "•",
+            Self::Commit(commit) => &commit.short_id,
+        }
+    }
+
+    pub fn date(&self) -> &str {
+        match self {
+            Self::Worktree => "",
+            Self::Commit(commit) => &commit.date,
+        }
+    }
+
+    pub fn summary(&self) -> &str {
+        match self {
+            Self::Worktree => "uncommitted changes",
+            Self::Commit(commit) => &commit.summary,
+        }
+    }
+
+    pub fn is_worktree(&self) -> bool {
+        matches!(self, Self::Worktree)
+    }
+}
+
+impl From<Commit> for Item {
+    fn from(commit: Commit) -> Self {
+        Self::Commit(commit)
+    }
+}
+
+/// Turns a row of the review list into the files it changed.
 ///
 /// A callback rather than a call into `source::git`, so this module stays
 /// ignorant of git and the tests stay free of repositories.
-pub type Loader<'a> = Box<dyn FnMut(&Commit) -> Result<Vec<Entry>, String> + 'a>;
+pub type Loader<'a> = Box<dyn FnMut(&Item) -> Result<Vec<Entry>, String> + 'a>;
 
 /// Which pane the keys are talking to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +117,7 @@ pub enum Event {
 }
 
 pub struct Review<'a> {
-    commits: Vec<Commit>,
+    items: Vec<Item>,
     selected: usize,
     scroll: usize,
     /// Rows the commit list can show. Set by the drawer.
@@ -75,12 +131,19 @@ pub struct Review<'a> {
     options: Options,
     notice: Option<String>,
     quit: bool,
+    loading: bool,
+    /// The selection moved and the diff has not caught up yet.
+    ///
+    /// Loading on the keystroke makes holding `j` unusable: every repeat waits
+    /// for a whole commit to be diffed. The load is deferred until the reader
+    /// stops moving — see [`Review::needs_settle`].
+    pending: bool,
 }
 
 impl<'a> Review<'a> {
-    pub fn new(commits: Vec<Commit>, loader: Loader<'a>, options: Options) -> Self {
+    pub fn new(items: Vec<Item>, loader: Loader<'a>, options: Options) -> Self {
         Self {
-            commits,
+            items,
             selected: 0,
             scroll: 0,
             height: 1,
@@ -92,11 +155,36 @@ impl<'a> Review<'a> {
             options,
             notice: None,
             quit: false,
+            loading: false,
+            pending: false,
         }
     }
 
-    pub fn commits(&self) -> &[Commit] {
-        &self.commits
+    pub fn items(&self) -> &[Item] {
+        &self.items
+    }
+
+    /// Add commits found since the list was first shown.
+    ///
+    /// The selection is kept where it is: rows only ever arrive at the end, so
+    /// appending must not move what the reader is looking at.
+    pub fn extend(&mut self, more: impl IntoIterator<Item = Item>) {
+        self.items.extend(more);
+        self.follow();
+    }
+
+    /// Whether more rows are still arriving.
+    pub fn loading(&self) -> bool {
+        self.loading
+    }
+
+    pub fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
+    }
+
+    /// Say something in the status line.
+    pub fn report(&mut self, message: impl Into<String>) {
+        self.notice = Some(message.into());
     }
 
     pub fn selected(&self) -> usize {
@@ -124,7 +212,7 @@ impl<'a> Review<'a> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.commits.is_empty()
+        self.items.is_empty()
     }
 
     pub fn diff(&self) -> Option<&App> {
@@ -135,8 +223,8 @@ impl<'a> Review<'a> {
         self.diff.as_mut()
     }
 
-    pub fn commit(&self) -> Option<&Commit> {
-        self.commits.get(self.selected)
+    pub fn item(&self) -> Option<&Item> {
+        self.items.get(self.selected)
     }
 
     /// Tell the review how tall the commit list is.
@@ -199,7 +287,7 @@ impl<'a> Review<'a> {
             return;
         }
 
-        let last = self.commits.len().saturating_sub(1);
+        let last = self.items.len().saturating_sub(1);
         self.selected = match event {
             Event::Up => self.selected.saturating_sub(1),
             Event::Down => (self.selected + 1).min(last),
@@ -214,12 +302,27 @@ impl<'a> Review<'a> {
         // That is the review motion — move down the log and watch what each
         // commit did — and it is the difference between this and a menu.
         if self.mode == Mode::Split {
+            self.pending = true;
+        }
+    }
+
+    /// Whether a deferred diff load is waiting.
+    ///
+    /// The event loop calls this when no keypress is queued, so scrolling the
+    /// log stays instant and the diff catches up the moment the reader pauses.
+    pub fn needs_settle(&self) -> bool {
+        self.pending
+    }
+
+    /// Do the deferred load.
+    pub fn settle(&mut self) {
+        if self.pending {
             self.load();
         }
     }
 
     fn open(&mut self) {
-        if self.commits.is_empty() {
+        if self.items.is_empty() {
             return;
         }
         self.load();
@@ -231,16 +334,17 @@ impl<'a> Review<'a> {
 
     /// Load the selected commit's diff, unless it is already loaded.
     fn load(&mut self) {
-        let Some(commit) = self.commits.get(self.selected).cloned() else {
+        self.pending = false;
+        let Some(item) = self.items.get(self.selected).cloned() else {
             return;
         };
-        if self.loaded.as_deref() == Some(commit.id.as_str()) {
+        if self.loaded.as_deref() == Some(item.key()) {
             return;
         }
 
-        match (self.loader)(&commit) {
+        match (self.loader)(&item) {
             Ok(entries) => {
-                self.loaded = Some(commit.id.clone());
+                self.loaded = Some(item.key().to_owned());
                 let mut diff = App::new(entries, self.options);
                 diff.nest();
                 self.diff = Some(diff);
@@ -261,13 +365,13 @@ impl<'a> Review<'a> {
         } else if self.selected >= self.scroll + self.height {
             self.scroll = self.selected + 1 - self.height;
         }
-        let max = self.commits.len().saturating_sub(self.height);
+        let max = self.items.len().saturating_sub(self.height);
         self.scroll = self.scroll.min(max);
     }
 
     /// The commits currently on screen.
     pub fn visible(&self) -> std::ops::Range<usize> {
-        self.scroll..(self.scroll + self.height).min(self.commits.len())
+        self.scroll..(self.scroll + self.height).min(self.items.len())
     }
 }
 
@@ -291,8 +395,8 @@ mod tests {
         }
     }
 
-    fn commits(count: usize) -> Vec<Commit> {
-        (0..count).map(commit).collect()
+    fn commits(count: usize) -> Vec<Item> {
+        (0..count).map(|n| Item::Commit(commit(n))).collect()
     }
 
     fn entry() -> Entry {
@@ -317,14 +421,43 @@ mod tests {
     fn review(count: usize, height: usize) -> (Review<'static>, Rc<RefCell<Vec<String>>>) {
         let asked: Rc<RefCell<Vec<String>>> = Rc::default();
         let recorder = Rc::clone(&asked);
-        let loader: Loader<'static> = Box::new(move |commit: &Commit| {
-            recorder.borrow_mut().push(commit.id.clone());
+        let loader: Loader<'static> = Box::new(move |item: &Item| {
+            recorder.borrow_mut().push(item.key().to_owned());
             Ok(vec![entry()])
         });
 
         let mut review = Review::new(commits(count), loader, options());
         review.set_log_viewport(height);
         (review, asked)
+    }
+
+    #[test]
+    fn the_worktree_row_describes_itself_without_pretending_to_be_a_commit() {
+        let worktree = Item::Worktree;
+        assert!(worktree.is_worktree());
+        assert_eq!(worktree.summary(), "uncommitted changes");
+        // Not something anything should try to resolve as an object.
+        assert!(!worktree.key().chars().all(|c| c.is_ascii_hexdigit()));
+        assert!(worktree.date().is_empty());
+    }
+
+    #[test]
+    fn the_worktree_row_loads_like_any_other() {
+        let asked: Rc<RefCell<Vec<String>>> = Rc::default();
+        let recorder = Rc::clone(&asked);
+        let loader: Loader<'static> = Box::new(move |item: &Item| {
+            recorder.borrow_mut().push(item.key().to_owned());
+            Ok(vec![entry()])
+        });
+
+        let mut items = vec![Item::Worktree];
+        items.extend(commits(3));
+        let mut review = Review::new(items, loader, options());
+        review.set_log_viewport(5);
+
+        review.apply(Event::Open);
+        assert_eq!(review.mode(), Mode::Split);
+        assert_eq!(asked.borrow().as_slice(), [Item::Worktree.key().to_owned()]);
     }
 
     #[test]
@@ -380,13 +513,57 @@ mod tests {
         review.apply(Event::ToggleFocus);
         assert_eq!(review.focus(), Pane::Log);
 
+        // Each move defers the load; the event loop settles it when the reader
+        // pauses. Both steps together are one "move and look".
         review.apply(Event::Down);
+        review.settle();
         review.apply(Event::Down);
+        review.settle();
 
         assert_eq!(
             asked.borrow().as_slice(),
             [commit(0).id, commit(1).id, commit(2).id]
         );
+    }
+
+    #[test]
+    fn racing_down_the_log_does_not_diff_every_commit_on_the_way() {
+        // Loading on the keystroke makes holding `j` unusable: every repeat
+        // waits for a whole commit to be diffed. Only where the reader stops
+        // is worth loading.
+        let (mut review, asked) = review(20, 5);
+        review.apply(Event::Open);
+        review.apply(Event::ToggleFocus);
+        asked.borrow_mut().clear();
+
+        for _ in 0..10 {
+            review.apply(Event::Down);
+        }
+        assert!(
+            asked.borrow().is_empty(),
+            "commits were diffed mid-scroll: {:?}",
+            asked.borrow()
+        );
+
+        assert!(review.needs_settle());
+        review.settle();
+        assert_eq!(asked.borrow().as_slice(), [commit(10).id]);
+        assert!(!review.needs_settle(), "settling should clear the debt");
+    }
+
+    #[test]
+    fn rows_arriving_later_do_not_move_the_selection() {
+        // A background walk appends while the reader is already looking at
+        // something. Their place must not shift under them.
+        let (mut review, _) = review(5, 5);
+        review.apply(Event::Down);
+        review.apply(Event::Down);
+        let selected = review.selected();
+
+        review.extend((100..140).map(|n| Item::Commit(commit(n))));
+
+        assert_eq!(review.selected(), selected);
+        assert_eq!(review.items().len(), 45);
     }
 
     #[test]
@@ -406,8 +583,11 @@ mod tests {
         review.apply(Event::Open);
         review.apply(Event::ToggleFocus);
         review.apply(Event::Down);
+        review.settle();
         review.apply(Event::Up);
+        review.settle();
         review.apply(Event::Down);
+        review.settle();
 
         // 0, then 1, then 0, then 1 — but never the same one twice running.
         let asked = asked.borrow();
@@ -461,8 +641,8 @@ mod tests {
 
     #[test]
     fn a_loader_failure_says_so_and_keeps_what_was_on_screen() {
-        let loader: Loader<'static> = Box::new(|commit: &Commit| {
-            if commit.id.ends_with('0') {
+        let loader: Loader<'static> = Box::new(|item: &Item| {
+            if item.key().ends_with('0') {
                 Ok(vec![entry()])
             } else {
                 Err("object 1234abc is missing".to_owned())
@@ -476,6 +656,7 @@ mod tests {
 
         review.apply(Event::ToggleFocus);
         review.apply(Event::Down);
+        review.settle();
         assert!(
             review.notice().is_some_and(|note| note.contains("missing")),
             "the failure should be reported: {:?}",
@@ -489,7 +670,7 @@ mod tests {
 
     #[test]
     fn an_empty_history_does_not_panic_on_any_event() {
-        let loader: Loader<'static> = Box::new(|_: &Commit| Ok(vec![entry()]));
+        let loader: Loader<'static> = Box::new(|_: &Item| Ok(vec![entry()]));
         let mut review = Review::new(Vec::new(), loader, options());
         review.set_log_viewport(5);
 
