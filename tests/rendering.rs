@@ -14,11 +14,11 @@
 //! always appears short. The width invariant is asserted directly, against the
 //! renderer, in `render::split`'s unit tests.
 
-use gdiff::diff::{self, Options as DiffOptions};
-use gdiff::highlight::Highlighting;
-use gdiff::model::{DiffDocument, SourceFile};
-use gdiff::render::{self, Options as RenderOptions, View, width::Wrap};
-use gdiff::theme::Theme;
+use increment::diff::{self, Options as DiffOptions};
+use increment::highlight::Highlighting;
+use increment::model::{DiffDocument, SourceFile};
+use increment::render::{self, Options as RenderOptions, View, width::Wrap};
+use increment::theme::Theme;
 
 const OLD: &str = include_str!("fixtures/catalog.old.rs");
 const NEW: &str = include_str!("fixtures/catalog.new.rs");
@@ -114,8 +114,8 @@ fn auto_falls_back_to_unified_on_a_narrow_terminal() {
 /// its own layout.
 #[test]
 fn the_browser_and_the_pager_lay_out_identically() {
-    use gdiff::render::split;
-    use gdiff::tui::state::{App, Entry};
+    use increment::render::split;
+    use increment::tui::state::{App, Entry};
 
     let document = fixture(Some(3));
     let options = RenderOptions {

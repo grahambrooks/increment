@@ -1,20 +1,17 @@
-# Releasing gdiff: prebuilt binaries, a GitHub Release, and the Homebrew
-# formula, with the crates.io publish last.
+# Releasing increment: prebuilt binaries, a GitHub Release, and the Homebrew
+# formula that points at them.
 #
-# Ordering is deliberate. `build` produces the artefacts, `release` publishes
-# them and computes their checksums, `formula` commits a Homebrew formula
-# pinned to those checksums, and `publish` pushes to crates.io — the
-# irreversible step, so everything that can fail goes before it.
+# There is no crates.io step. `increment`, `inc` and `incr` are all taken there,
+# so this ships from GitHub only — `publish = false` in Cargo.toml makes that a
+# build error rather than a surprise at the registry.
+#
+# Ordering is deliberate: `build` produces the artefacts, `release` publishes
+# them and computes their checksums, and `formula` commits a Homebrew formula
+# pinned to those checksums.
 
 name: release
 
 on:
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Run `cargo publish --dry-run` and stop
-        type: boolean
-        default: true
   push:
     tags:
       - "v*"
@@ -84,9 +81,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          name="gdiff-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="increment-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "dist/${name}"
-          cp "target/${{ matrix.target }}/dist/gdiff" "dist/${name}/"
+          cp "target/${{ matrix.target }}/dist/inc" "dist/${name}/"
           cp README.md LICENSE "dist/${name}/"
           tar -C dist -czf "${name}.tar.gz" "${name}"
           shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
@@ -96,9 +93,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          name="gdiff-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="increment-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir -p "dist/${name}"
-          cp "target/${{ matrix.target }}/dist/gdiff.exe" "dist/${name}/"
+          cp "target/${{ matrix.target }}/dist/inc.exe" "dist/${name}/"
           cp README.md LICENSE "dist/${name}/"
           (cd dist && 7z a "../${name}.zip" "${name}") > /dev/null
           sha256sum "${name}.zip" > "${name}.zip.sha256"
@@ -110,14 +107,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          binary="target/${{ matrix.target }}/dist/gdiff"
+          binary="target/${{ matrix.target }}/dist/inc"
           [ "${{ matrix.windows }}" = "true" ] && binary="${binary}.exe"
           "$binary" --version
           "$binary" --help > /dev/null
 
       - uses: actions/upload-artifact@v7
         with:
-          name: gdiff-${{ matrix.target }}
+          name: increment-${{ matrix.target }}
           path: |
             *.tar.gz
             *.tar.gz.sha256
@@ -153,7 +150,7 @@ jobs:
           for line in pathlib.Path("SHA256SUMS").read_text().splitlines():
               digest, _, name = line.partition("  ")
               name = name.strip()
-              match = re.search(r"gdiff-[^-]+-(.+?)\.(tar\.gz|zip)$", name)
+              match = re.search(r"increment-[^-]+-(.+?)\.(tar\.gz|zip)$", name)
               if match:
                   sums[match.group(1)] = digest.strip()
           print("json=" + json.dumps(sums))
@@ -169,8 +166,8 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
 
-  # The formula is committed here rather than to a `homebrew-gdiff` tap, so the
-  # tap command needs an explicit URL. See README.
+  # The formula is committed here rather than to a `homebrew-increment` tap, so
+  # the tap command needs an explicit URL. See README.
   formula:
     needs: release
     if: startsWith(github.ref, 'refs/tags/')
@@ -179,7 +176,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
-      - name: Render Formula/gdiff.rb
+      - name: Render Formula/increment.rb
         env:
           CHECKSUMS: ${{ needs.release.outputs.checksums }}
         shell: bash
@@ -187,8 +184,8 @@ jobs:
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p Formula
-          VERSION="$VERSION" python3 .github/render-formula.py > Formula/gdiff.rb
-          cat Formula/gdiff.rb
+          VERSION="$VERSION" python3 .github/render-formula.py > Formula/increment.rb
+          cat Formula/increment.rb
 
       - name: Commit it
         shell: bash
@@ -201,50 +198,11 @@ jobs:
           # change for an *untracked* file, so the very first formula — the one
           # release this most needs to work — would be silently skipped while
           # the job reported success.
-          git add Formula/gdiff.rb
-          if git diff --cached --quiet -- Formula/gdiff.rb; then
+          git add Formula/increment.rb
+          if git diff --cached --quiet -- Formula/increment.rb; then
             echo "::notice::formula unchanged"
             exit 0
           fi
           git commit -m "chore(release): Homebrew formula for ${GITHUB_REF_NAME}"
           git push origin main
-          echo "::notice::committed Formula/gdiff.rb for ${GITHUB_REF_NAME}"
-
-  publish:
-    needs: [build, release, formula]
-    if: always() && !cancelled() && !failure()
-    runs-on: ubuntu-24.04
-    environment: crates-io
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - id: version
-        run: |
-          set -euo pipefail
-          VERSION=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "::notice::Cargo.toml declares ${VERSION}"
-
-      - name: Verify tag matches Cargo.toml version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          set -euo pipefail
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "${TAG_VERSION}" != "${{ steps.version.outputs.version }}" ]]; then
-            echo "::error::tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${{ steps.version.outputs.version }}"
-            exit 1
-          fi
-
-      - name: Publish
-        run: |
-          set -euo pipefail
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
-            echo "::notice::dry run — nothing will be published"
-            cargo publish -p gdiff --dry-run
-            exit 0
-          fi
-          cargo publish -p gdiff
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          echo "::notice::committed Formula/increment.rb for ${GITHUB_REF_NAME}"

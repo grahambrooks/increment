@@ -14,7 +14,7 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  # Three platforms rather than one ubuntu job, and gdiff is the case where that
+  # Three platforms rather than one ubuntu job, and increment is the case where that
   # earns its keep: this tool's whole surface is terminal handling, unicode
   # column arithmetic and line endings. CRLF, a Windows console and a macOS
   # terminal each break assumptions that a Linux-only matrix would never see.

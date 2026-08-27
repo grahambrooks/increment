@@ -13,7 +13,7 @@ use super::surface;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "gdiff",
+    name = "inc",
     version,
     about = "The aligned side-by-side diff view, in the terminal.",
     long_about = None,
@@ -30,7 +30,7 @@ pub struct Args {
 
     /// Read a unified diff from standard input instead of comparing files.
     ///
-    /// For use as a git pager. Lower fidelity than `gdiff git`: a patch only
+    /// For use as a git pager. Lower fidelity than `inc git`: a patch only
     /// carries the context git chose to print.
     #[arg(long, short = 'p', conflicts_with_all = ["old", "new"])]
     pub patch: bool,
@@ -253,7 +253,7 @@ impl Args {
             (None, false, Some(old), Some(new)) => Ok(Source::Files { old, new }),
             (None, false, Some(_), None) => Err("expected two files to compare, got one"),
             (None, false, None, _) => {
-                Err("nothing to compare: give two files, `gdiff git`, or `--patch`")
+                Err("nothing to compare: give two files, `inc git`, or `--patch`")
             }
         }
     }
@@ -354,11 +354,11 @@ mod tests {
     use clap::CommandFactory;
 
     fn parse(args: &[&str]) -> Args {
-        Args::try_parse_from([&["gdiff"], args, &["a.rs", "b.rs"]].concat()).expect("parses")
+        Args::try_parse_from([&["inc"], args, &["a.rs", "b.rs"]].concat()).expect("parses")
     }
 
     fn parse_bare(args: &[&str]) -> Args {
-        Args::try_parse_from([&["gdiff"], args].concat()).expect("parses")
+        Args::try_parse_from([&["inc"], args].concat()).expect("parses")
     }
 
     #[test]
@@ -408,7 +408,7 @@ mod tests {
             diff::Whitespace::IgnoreChange
         );
         // Asking for both at once is a contradiction, not a precedence puzzle.
-        assert!(Args::try_parse_from(["gdiff", "-w", "-b", "a", "b"]).is_err());
+        assert!(Args::try_parse_from(["inc", "-w", "-b", "a", "b"]).is_err());
     }
 
     #[test]
@@ -462,14 +462,14 @@ mod tests {
 
     #[test]
     fn options_may_come_before_the_subcommand() {
-        // `gdiff --ui tui git` must not be read as the two-file form with `git`
+        // `inc --ui tui git` must not be read as the two-file form with `git`
         // as the first path.
         for args in [
             vec!["git", "--view", "unified"],
             vec!["--view", "unified", "git"],
             vec!["--ui", "tui", "git", "HEAD~1..HEAD"],
         ] {
-            let parsed = Args::try_parse_from([vec!["gdiff"], args.clone()].concat())
+            let parsed = Args::try_parse_from([vec!["increment"], args.clone()].concat())
                 .unwrap_or_else(|error| panic!("{args:?} should parse: {error}"));
             assert!(
                 matches!(parsed.source(), Ok(Source::Git { .. })),
@@ -505,7 +505,7 @@ mod tests {
             Ok(Source::Patch)
         ));
         // Giving it files as well is a contradiction, and clap should say so.
-        assert!(Args::try_parse_from(["gdiff", "--patch", "a.rs", "b.rs"]).is_err());
+        assert!(Args::try_parse_from(["inc", "--patch", "a.rs", "b.rs"]).is_err());
     }
 
     #[test]

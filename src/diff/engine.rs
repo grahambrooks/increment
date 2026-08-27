@@ -15,7 +15,7 @@ use imara_diff::InternedInput;
 ///
 /// Applied to the text the diff *compares*, never to the text it *shows*: a
 /// line still renders exactly as it is on disk. Normalising for display would
-/// turn "your reformatting is hidden" into "gdiff lied about the file".
+/// turn "your reformatting is hidden" into "increment lied about the file".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Whitespace {
     /// Every byte counts.

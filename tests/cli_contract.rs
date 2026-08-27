@@ -8,8 +8,8 @@
 use std::io::Write;
 use std::process::Command;
 
-fn gdiff() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_gdiff"))
+fn increment() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_inc"))
 }
 
 /// Two temporary files with the given contents, in a directory of their own.
@@ -21,7 +21,8 @@ struct Pair {
 
 impl Pair {
     fn new(name: &str, old: &str, new: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("gdiff-test-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("increment-test-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let write = |file: &str, text: &str| {
             let path = dir.join(file);
@@ -46,7 +47,7 @@ impl Drop for Pair {
 #[test]
 fn identical_files_exit_zero_and_print_nothing() {
     let pair = Pair::new("same", "alpha\nbeta\n", "alpha\nbeta\n");
-    let output = gdiff()
+    let output = increment()
         .args([&pair.old, &pair.new])
         .output()
         .expect("the binary runs");
@@ -62,7 +63,7 @@ fn identical_files_exit_zero_and_print_nothing() {
 #[test]
 fn differing_files_exit_one_like_diff_does() {
     let pair = Pair::new("differ", "let x = 1;\n", "let x = 2;\n");
-    let output = gdiff()
+    let output = increment()
         .args([&pair.old, &pair.new])
         .output()
         .expect("the binary runs");
@@ -80,7 +81,7 @@ fn output_to_a_pipe_carries_no_escape_codes() {
     // stdout is captured here, so it is not a terminal. Colour must strip
     // itself; a diff redirected into a file should be readable text.
     let pair = Pair::new("piped", "let x = 1;\n", "let x = 2;\n");
-    let output = gdiff()
+    let output = increment()
         .args([&pair.old, &pair.new])
         .output()
         .expect("the binary runs");
@@ -95,23 +96,23 @@ fn output_to_a_pipe_carries_no_escape_codes() {
 #[test]
 fn a_missing_file_is_trouble_not_a_difference() {
     let pair = Pair::new("missing", "a\n", "a\n");
-    let output = gdiff()
+    let output = increment()
         .args([
             pair.old.as_path(),
-            std::path::Path::new("/nonexistent/gdiff"),
+            std::path::Path::new("/nonexistent/increment"),
         ])
         .output()
         .expect("the binary runs");
 
     assert_eq!(output.status.code(), Some(2), "exit code");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("/nonexistent/gdiff"), "{stderr}");
+    assert!(stderr.contains("/nonexistent/increment"), "{stderr}");
 }
 
 #[test]
 fn json_output_parses() {
     let pair = Pair::new("json", "let x = 1;\n", "let x = 2;\n");
-    let output = gdiff()
+    let output = increment()
         .args([pair.old.as_path(), pair.new.as_path()])
         .args(["--format", "json"])
         .output()
@@ -127,7 +128,7 @@ fn json_output_parses() {
 #[test]
 fn a_redirected_tui_request_exits_with_trouble_and_says_why() {
     let pair = Pair::new("tui", "a\n", "b\n");
-    let output = gdiff()
+    let output = increment()
         .args(["--ui", "tui"])
         .args([pair.old.as_path(), pair.new.as_path()])
         .output()
@@ -142,7 +143,7 @@ fn a_redirected_tui_request_exits_with_trouble_and_says_why() {
     assert!(stderr.contains("needs a terminal"), "{stderr}");
 }
 
-/// `gdiff a b | head` must not print an error after the reader goes away.
+/// `inc a b | head` must not print an error after the reader goes away.
 #[cfg(unix)]
 #[test]
 fn a_closed_pipe_is_a_normal_end_not_an_error() {
@@ -162,7 +163,7 @@ fn a_closed_pipe_is_a_normal_end_not_an_error() {
         .arg("-c")
         .arg(format!(
             "{} --full '{}' '{}' | head -2",
-            env!("CARGO_BIN_EXE_gdiff").replace('\'', "'\\''"),
+            env!("CARGO_BIN_EXE_inc").replace('\'', "'\\''"),
             pair.old.display(),
             pair.new.display()
         ))
@@ -175,7 +176,10 @@ fn a_closed_pipe_is_a_normal_end_not_an_error() {
 
 #[test]
 fn version_reports_the_calver_version() {
-    let output = gdiff().arg("--version").output().expect("the binary runs");
+    let output = increment()
+        .arg("--version")
+        .output()
+        .expect("the binary runs");
 
     assert!(output.status.success(), "--version should succeed");
     let stdout = String::from_utf8_lossy(&output.stdout);

@@ -4,7 +4,7 @@ Status: **6a–6d built (2026-08-26)** · Follows: `002-architecture-and-plan.md
 
 Phases 0–5 built a diff *visualiser*: point it at two files or a revision and it draws them well.
 What it cannot do is the thing you actually sit down to do — **work through a branch, commit by
-commit**. You have to know which revision you want before gdiff is any use. tig's answer to that
+commit**. You have to know which revision you want before increment is any use. tig's answer to that
 is a view model worth studying, and partly worth taking.
 
 ---
@@ -27,16 +27,16 @@ Sources: [tig manual](https://jonas.github.io/tig/doc/manual.html),
 
 ## 2. What is worth taking, and what is not
 
-The test applied here: *does this serve looking at a diff, or does it turn gdiff into a git
+The test applied here: *does this serve looking at a diff, or does it turn increment into a git
 browser?* The second is a different product, and one that already exists.
 
 ### Take
 
-| From tig | Why it fits gdiff |
+| From tig | Why it fits increment |
 |---|---|
-| **A commit list, `Enter` to see its diff** | The missing half of the review loop. gdiff renders a commit's diff better than tig does; it just has no way to *choose* one. |
+| **A commit list, `Enter` to see its diff** | The missing half of the review loop. increment renders a commit's diff better than tig does; it just has no way to *choose* one. |
 | **Parent/child split with cursor tracking** | Moving down the log and watching the diff follow is the review motion itself. |
-| **View stack — `q` closes, `Q` quits** | gdiff's `q` currently quits outright, which is wrong the moment there is more than one view. |
+| **View stack — `q` closes, `Q` quits** | inc's `q` currently quits outright, which is wrong the moment there is more than one view. |
 | **Incremental loading** | A branch with 50k commits must not block the first frame. |
 
 ### Leave
@@ -46,10 +46,10 @@ browser?* The second is a different product, and one that already exists.
 | **Status and stage views** | Staging is *editing*. `CLAUDE.md` already lists editing as out of scope, and a diff viewer that half-stages is worse than one that does not. |
 | **Tree and blob views** | A file browser. Nothing to do with showing a difference. |
 | **Blame** | A different tool with a different data model. |
-| **Refs, stash, grep** | Repository browsing. This is the line between "review a change" and "explore a repository", and it is the line gdiff should hold. |
+| **Refs, stash, grep** | Repository browsing. This is the line between "review a change" and "explore a repository", and it is the line increment should hold. |
 | **Pager mode** | Already exists as `--patch`. |
 
-**The resulting pitch stays intact:** gdiff is not a git browser with a diff view bolted on; it
+**The resulting pitch stays intact:** increment is not a git browser with a diff view bolted on; it
 is a diff viewer that can now be pointed at a commit without you naming it first.
 
 ## 3. What this costs
@@ -70,11 +70,11 @@ Realistically this is phase 4 again in size.
 ## 4. Proposed phasing
 
 ### 6a — the log view — **done**
-`gdiff review [<revrange>] [paths…] [--limit N]` opens a commit list. `Enter` opens that
+`inc review [<revrange>] [paths…] [--limit N]` opens a commit list. `Enter` opens that
 commit's diff in the browser that already exists; `q` returns to the list, and only quits from
 the list itself.
 
-**Done when:** `gdiff review HEAD~20..HEAD` lists twenty commits, `Enter` shows one, `q` comes
+**Done when:** `inc review HEAD~20..HEAD` lists twenty commits, `Enter` shows one, `q` comes
 back, and the navigation is unit-tested with no terminal, as in phase 4. *Met.*
 
 ### 6b — the split, with cursor tracking — **done**
@@ -136,7 +136,7 @@ Two separate findings behind those numbers:
   *when* rather than *where*.
 
 ### 6d — the working tree as a row — **done**
-An "uncommitted changes" row at the top of the list, marked `•`, opening the same view `gdiff
+An "uncommitted changes" row at the top of the list, marked `•`, opening the same view `inc
 git` shows. Present whenever no explicit range was named — reviewing "this branch" nearly always
 means reviewing what is not committed yet as well.
 
@@ -146,9 +146,9 @@ list.
 
 ## 5. The decision, taken
 
-6a changed what gdiff *is* — from "render this diff" to "review this branch". That was a
+6a changed what increment *is* — from "render this diff" to "review this branch". That was a
 positioning change rather than a feature, and it was taken deliberately on 2026-08-26;
-`CLAUDE.md`'s positioning section now says so. gdiff is still not a git browser: the line in §2
+`CLAUDE.md`'s positioning section now says so. increment is still not a git browser: the line in §2
 is what keeps it from becoming one, and it holds.
 
 ## 5a. Keyboard navigation for files (2026-08-27)
@@ -212,5 +212,5 @@ Two things that fell out of doing it:
   on the draw path. Neither is a problem at a few hundred commits; both will be at fifty
   thousand. Incremental loading with a progress indication, and diffing off the draw path.
 - **6d — the working tree as a row.** An "uncommitted changes" entry at the top of the log,
-  opening `gdiff git`. Small, and it is what makes the tool usable mid-work rather than only
+  opening `inc git`. Small, and it is what makes the tool usable mid-work rather than only
   after committing.

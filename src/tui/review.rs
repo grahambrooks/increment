@@ -6,7 +6,7 @@
 //! version: a commit list with `Enter` to open its diff, a split with the
 //! selection driving the diff below it, and a view stack where `q` closes a
 //! view rather than the program. Not staging, not a tree browser, not blame.
-//! Those would make gdiff a second git browser; it is a diff viewer that can
+//! Those would make increment a second git browser; it is a diff viewer that can
 //! now be pointed at a commit without being told which one.
 //!
 //! Like [`super::state`], this knows nothing about terminals. It does not know

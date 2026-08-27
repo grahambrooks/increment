@@ -14,7 +14,7 @@ use std::fmt;
 /// What the user asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Request {
-    /// Let gdiff decide. Resolves to a stdout renderer, always.
+    /// Let increment decide. Resolves to a stdout renderer, always.
     #[default]
     Auto,
     /// Styled structured stdout.
@@ -23,7 +23,7 @@ pub enum Request {
     Tui,
 }
 
-/// What gdiff will actually do.
+/// What increment will actually do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Surface {
     Plain,

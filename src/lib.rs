@@ -1,4 +1,4 @@
-//! gdiff — the aligned side-by-side diff view, in the terminal, as structured
+//! increment — the aligned side-by-side diff view, in the terminal, as structured
 //! output.
 //!
 //! The layering is the load-bearing decision, and it is worth stating where

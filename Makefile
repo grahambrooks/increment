@@ -4,7 +4,7 @@
 # CalVer is YYYY.M.MICRO, where MICRO counts the releases already cut this
 # month. The month has no leading zero: 2026.08.1 is not valid SemVer, and
 # cargo requires SemVer. The version is committed in Cargo.toml rather than
-# injected at release time, because that is what `gdiff --version`, every
+# injected at release time, because that is what `inc --version`, every
 # installer, and crates.io all read.
 
 SHELL := /usr/bin/env bash
@@ -100,7 +100,7 @@ release: release-guard check
 	@git diff --cached --quiet \
 		&& echo 'version already at $(VERSION); tagging existing commit' \
 		|| git commit --quiet -m 'Release $(VERSION)'
-	git tag -a '$(TAG)' -m 'gdiff $(VERSION)'
+	git tag -a '$(TAG)' -m 'increment $(VERSION)'
 	git push --quiet origin main
 	git push --quiet origin '$(TAG)'
 	@echo 'pushed $(TAG)'

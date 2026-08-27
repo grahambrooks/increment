@@ -722,26 +722,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gdiff"
-version = "2026.8.0"
-dependencies = [
- "anstream",
- "anstyle",
- "clap",
- "gix",
- "imara-diff",
- "insta",
- "ratatui",
- "serde",
- "serde_json",
- "syntect",
- "terminal_size",
- "two-face",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1667,6 +1647,26 @@ checksum = "2f01d462f766df78ab820dd06f5eb700233c51f0f4c2e846520eaf4ba6aa5c5c"
 dependencies = [
  "hashbrown 0.15.5",
  "memchr",
+]
+
+[[package]]
+name = "increment"
+version = "2026.8.0"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap",
+ "gix",
+ "imara-diff",
+ "insta",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "syntect",
+ "terminal_size",
+ "two-face",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]

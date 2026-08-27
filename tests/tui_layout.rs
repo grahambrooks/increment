@@ -8,12 +8,12 @@
 //! where it carries meaning — putting styles in a snapshot would make every
 //! palette tweak look like a layout regression.
 
-use gdiff::diff::{Options as DiffOptions, compare};
-use gdiff::highlight::Highlighting;
-use gdiff::model::SourceFile;
-use gdiff::render::Options as RenderOptions;
-use gdiff::theme::Theme;
-use gdiff::tui::state::{Action, App, Entry};
+use increment::diff::{Options as DiffOptions, compare};
+use increment::highlight::Highlighting;
+use increment::model::SourceFile;
+use increment::render::Options as RenderOptions;
+use increment::theme::Theme;
+use increment::tui::state::{Action, App, Entry};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
@@ -63,7 +63,7 @@ fn app(entries: Vec<Entry>) -> App {
 fn draw(app: &mut App, width: u16, height: u16) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
     terminal
-        .draw(|frame| gdiff::tui::draw::draw(frame, app))
+        .draw(|frame| increment::tui::draw::draw(frame, app))
         .expect("draws");
 
     let buffer = terminal.backend().buffer().clone();
@@ -181,7 +181,7 @@ fn the_change_map_marks_where_the_reader_is() {
     let mut app = app(vec![long("only.rs")]);
     let mut terminal = Terminal::new(TestBackend::new(100, 16)).expect("terminal");
     terminal
-        .draw(|frame| gdiff::tui::draw::draw(frame, &mut app))
+        .draw(|frame| increment::tui::draw::draw(frame, &mut app))
         .expect("draws");
 
     let buffer = terminal.backend().buffer().clone();
@@ -210,8 +210,8 @@ fn the_change_map_marks_where_the_reader_is() {
 // The review flow: a commit list, and the selected commit's diff below it.
 // ---------------------------------------------------------------------------
 
-use gdiff::source::git::Commit;
-use gdiff::tui::review::{Event, Item, Loader, Review};
+use increment::source::git::Commit;
+use increment::tui::review::{Event, Item, Loader, Review};
 
 fn commit(n: usize, summary: &str) -> Commit {
     Commit {
@@ -248,7 +248,7 @@ fn review() -> Review<'static> {
 fn draw_review(review: &mut Review<'_>, width: u16, height: u16) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("terminal");
     terminal
-        .draw(|frame| gdiff::tui::draw::review(frame, review))
+        .draw(|frame| increment::tui::draw::review(frame, review))
         .expect("draws");
 
     let buffer = terminal.backend().buffer().clone();
@@ -287,7 +287,7 @@ fn the_selected_commit_is_marked_in_the_list() {
 
     let mut terminal = Terminal::new(TestBackend::new(90, 12)).expect("terminal");
     terminal
-        .draw(|frame| gdiff::tui::draw::review(frame, &mut review))
+        .draw(|frame| increment::tui::draw::review(frame, &mut review))
         .expect("draws");
     let buffer = terminal.backend().buffer().clone();
 

@@ -1,4 +1,4 @@
-# gdiff — a single crate that is both a library and a binary.
+# increment — a single crate that is both a library and a binary.
 #
 # Not a workspace, deliberately: one manifest, no inter-crate version pinning,
 # and the subsystem boundaries (model, diff, render, source) are expressed as
@@ -9,7 +9,7 @@
 # `tests/`, and the alignment logic is the part that most needs testing.
 
 [package]
-name = "gdiff"
+name = "increment"
 # CalVer, YYYY.M.MICRO, committed rather than injected — MICRO counts the
 # releases already cut this month. The month carries no leading zero because
 # 2026.08.0 is not valid SemVer and cargo requires SemVer. Bump with
@@ -18,8 +18,8 @@ version = "2026.8.0"
 edition = "2024"
 license = "MIT"
 description = "A diff visualizer for the terminal: the aligned side-by-side view, as structured output."
-repository = "https://github.com/grahambrooks/gdiff"
-homepage = "https://github.com/grahambrooks/gdiff"
+repository = "https://github.com/grahambrooks/increment"
+homepage = "https://github.com/grahambrooks/increment"
 keywords = ["diff", "git", "terminal", "tui", "side-by-side"]
 categories = ["command-line-utilities", "development-tools"]
 # Tracks latest stable, and is pinned a second time in rust-toolchain.toml so a
@@ -28,11 +28,15 @@ categories = ["command-line-utilities", "development-tools"]
 rust-version = "1.98.0"
 
 [lib]
-name = "gdiff"
+name = "increment"
 path = "src/lib.rs"
 
+# The command is `inc`, not `in`. `in` is a reserved word in bash and `sh`, where
+# a bare `in --help` is a syntax error rather than a command — and git runs
+# pagers and difftools through `sh -c`, so it would have broken exactly the
+# integrations this tool is for. `inc` needs no quoting in any shell.
 [[bin]]
-name = "gdiff"
+name = "inc"
 path = "src/main.rs"
 required-features = ["cli"]
 

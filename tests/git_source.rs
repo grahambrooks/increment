@@ -1,11 +1,11 @@
 //! The git source, against real repositories.
 //!
-//! These build a repository with the `git` binary and then check gdiff against
+//! These build a repository with the `git` binary and then check increment against
 //! it. Using git as the oracle is the point: the claim worth testing is not
 //! "the code runs" but "it selects the same changes git does", and only git can
 //! settle that.
 //!
-//! Note the asymmetry with the product: gdiff itself never shells out to git —
+//! Note the asymmetry with the product: increment itself never shells out to git —
 //! it reads the repository with `gix`, in process. Git is a *test* dependency
 //! here, and if it is missing these fail loudly rather than skipping quietly.
 
@@ -19,7 +19,7 @@ struct Repo {
 impl Repo {
     fn new(name: &str) -> Self {
         let dir = std::env::temp_dir().join(format!(
-            "gdiff-git-{name}-{}-{:?}",
+            "increment-git-{name}-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -31,7 +31,7 @@ impl Repo {
         // Committing needs an identity, and the ambient one may be absent or
         // may be signed, which would make these tests depend on a key.
         repo.git(&["config", "user.email", "test@example.invalid"]);
-        repo.git(&["config", "user.name", "gdiff tests"]);
+        repo.git(&["config", "user.name", "increment tests"]);
         repo.git(&["config", "commit.gpgsign", "false"]);
         repo
     }
@@ -69,9 +69,9 @@ impl Repo {
         self.git(&["commit", "-m", message]);
     }
 
-    /// Run gdiff inside the repository.
-    fn gdiff(&self, args: &[&str]) -> (String, i32) {
-        let output = Command::new(env!("CARGO_BIN_EXE_gdiff"))
+    /// Run increment inside the repository.
+    fn increment(&self, args: &[&str]) -> (String, i32) {
+        let output = Command::new(env!("CARGO_BIN_EXE_inc"))
             .current_dir(&self.dir)
             .args(args)
             .output()
@@ -82,9 +82,9 @@ impl Repo {
         )
     }
 
-    /// The files gdiff reports, from its unified headers.
+    /// The files increment reports, from its unified headers.
     fn changed_files(&self, args: &[&str]) -> Vec<String> {
-        let (stdout, _) = self.gdiff(&[args, &["--view", "unified"]].concat());
+        let (stdout, _) = self.increment(&[args, &["--view", "unified"]].concat());
         let mut files: Vec<String> = stdout
             .lines()
             .filter_map(|line| line.strip_prefix("+++ b/"))
@@ -169,7 +169,7 @@ fn an_unmodified_tree_reports_nothing_and_exits_zero() {
     let repo = Repo::new("clean");
     seed(&repo);
 
-    let (stdout, code) = repo.gdiff(&["git"]);
+    let (stdout, code) = repo.increment(&["git"]);
     assert_eq!(code, 0, "exit code");
     assert!(stdout.is_empty(), "{stdout}");
 }
@@ -240,7 +240,7 @@ fn a_deleted_file_is_a_diff_against_nothing() {
 
     assert_eq!(repo.changed_files(&["git"]), ["README.md"]);
 
-    let (stdout, code) = repo.gdiff(&["git", "--view", "unified"]);
+    let (stdout, code) = repo.increment(&["git", "--view", "unified"]);
     assert_eq!(code, 1, "exit code");
     assert!(stdout.contains("-# project"), "{stdout}");
 }
@@ -257,7 +257,7 @@ fn a_new_file_is_shown_as_all_additions() {
         repo.changed_files(&["git"]),
         repo.git_changed_files(&["HEAD"])
     );
-    let (stdout, _) = repo.gdiff(&["git", "--view", "unified"]);
+    let (stdout, _) = repo.increment(&["git", "--view", "unified"]);
     assert!(stdout.contains("+pub fn brand_new() {}"), "{stdout}");
 }
 
@@ -270,7 +270,7 @@ fn a_binary_file_is_named_rather_than_rendered_or_dropped() {
     repo.commit("add a binary");
     repo.write_bytes("logo.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\x0eIHDR!");
 
-    let (stdout, code) = repo.gdiff(&["git", "--view", "unified"]);
+    let (stdout, code) = repo.increment(&["git", "--view", "unified"]);
     assert_eq!(code, 1, "a binary change is still a change");
     assert!(
         stdout.contains("Binary file b/logo.png differs"),
@@ -290,7 +290,7 @@ fn several_changed_files_are_separated_in_the_output() {
         "pub fn add(a: i32, b: i32) -> i32 {\n    a - b\n}\n",
     );
 
-    let (stdout, _) = repo.gdiff(&["git", "--view", "unified"]);
+    let (stdout, _) = repo.increment(&["git", "--view", "unified"]);
     assert_eq!(stdout.matches("--- a/").count(), 2, "{stdout}");
     assert_eq!(stdout.matches("+++ b/").count(), 2, "{stdout}");
 }
@@ -300,7 +300,7 @@ fn a_bad_revision_is_trouble_with_a_message() {
     let repo = Repo::new("badrev");
     seed(&repo);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_gdiff"))
+    let output = Command::new(env!("CARGO_BIN_EXE_inc"))
         .current_dir(&repo.dir)
         .args(["git", "no-such-revision"])
         .output()
@@ -313,10 +313,10 @@ fn a_bad_revision_is_trouble_with_a_message() {
 
 #[test]
 fn outside_a_repository_it_says_so() {
-    let dir = std::env::temp_dir().join(format!("gdiff-norepo-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("increment-norepo-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_gdiff"))
+    let output = Command::new(env!("CARGO_BIN_EXE_inc"))
         .current_dir(&dir)
         .arg("git")
         .output()
@@ -359,7 +359,7 @@ fn a_patch_on_stdin_renders_with_the_right_line_numbers() {
     let patch = repo.git(&["diff", "HEAD"]);
     assert!(patch.contains("@@"), "expected a real patch: {patch}");
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_gdiff"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_inc"))
         .current_dir(&repo.dir)
         .args(["--patch", "--view", "split", "--width", "160"])
         .stdin(std::process::Stdio::piped())

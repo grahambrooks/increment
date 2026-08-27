@@ -4,7 +4,7 @@ Status: draft for review · Date: 2026-08-26 · Depends on: `001-visual-diff-sta
 
 ## 1. Shape
 
-Single binary crate, `gdiff`, directory modules under `src/` — no workspace. Pure Rust: no C
+Single binary crate, `inc`, directory modules under `src/` — no workspace. Pure Rust: no C
 toolchain, no runtime dependency on git, diff or any external binary.
 
 ```
@@ -89,7 +89,7 @@ formula generated at release time; trunk-based, straight to `main`.
 Two things went beyond the line above, both deliberate:
 
 - **CI runs three platforms, not one `ubuntu-latest` job.** The portfolio default is a single
-  Linux job, but gdiff's entire surface is terminal handling, unicode column arithmetic and line
+  Linux job, but increment's entire surface is terminal handling, unicode column arithmetic and line
   endings — CRLF, a Windows console and a macOS terminal each break assumptions Linux never
   surfaces. Windows CI has already earned its keep on brake and bx for exactly this reason.
 - **The surface rule is code with tests from day one**, not a note for phase 4:
@@ -104,8 +104,8 @@ CI half of this criterion is not met.*
 Line diff via imara-diff; block classification; intra-block pairing; word-level spans; the
 `Row` model; `render::unified`; `--format json`.
 
-**Done when:** `gdiff a.rs b.rs` prints a styled unified diff with changed substrings
-highlighted; `gdiff --format json a.rs b.rs` emits the same document as JSON; piping produces no
+**Done when:** `inc a.rs b.rs` prints a styled unified diff with changed substrings
+highlighted; `inc --format json a.rs b.rs` emits the same document as JSON; piping produces no
 escape codes; insta snapshots cover the fixture set. *All met.*
 
 Three things the work settled that the plan had not:
@@ -157,7 +157,7 @@ Decisions taken during the work:
 pager mode for `core.pager` compatibility, documented as reduced-fidelity; `git difftool` setup
 instructions.
 
-**Done when:** `gdiff git`, `gdiff git <rev>` and `git diff | gdiff --patch` all render, and the
+**Done when:** `inc git`, `inc git <rev>` and `git diff | inc --patch` all render, and the
 README documents both the pager and difftool configurations. *All met.* Open question 3 is
 answered by shipping the pager mode with its limits stated in both the README and the module.
 
@@ -170,7 +170,7 @@ What the work turned up:
   *silently invisible*: no output, exit 0, as though the file were clean. `Stat::is_racy` settles
   it, and a test pins the case. Three integration tests failed on this before it was fixed.
 - **Git is the oracle for the git tests.** They build fixture repositories with the `git` binary
-  and assert gdiff selects the same paths `git diff --name-only` does. The claim worth testing is
+  and assert increment selects the same paths `git diff --name-only` does. The claim worth testing is
   not that the code runs but that it agrees with git. Note the asymmetry: git is a *test*
   dependency only — the product reads the repository in process via `gix`.
 - **Binary files are named, never dropped.** `Binary file b/logo.png differs`, and they count
@@ -207,7 +207,7 @@ Three bugs the work turned up, all of them navigation:
 - **The change map marked everything.** The viewport indicator covered every cell when the file
   fitted on screen, which says nothing. It only draws when there is somewhere else to be.
 
-And one interface wart: `gdiff --ui tui git` was read as the two-file form with `git` as the
+And one interface wart: `inc --ui tui git` was read as the two-file form with `git` as the
 first path. `args_conflicts_with_subcommands` was the cause; without it clap resolves the
 subcommand from either position, and a test now covers both orders.
 
@@ -216,7 +216,7 @@ Block move detection with alternating tints; whitespace-change modes.
 
 **Done when:** a commit that moves a function shows it as a move rather than delete+add, with a
 test asserting exactly that. *Met* — and checked against git: on the same pure move,
-`git diff --color-moved=zebra` and gdiff mark the same four lines on each side.
+`git diff --color-moved=zebra` and increment mark the same four lines on each side.
 
 - **Move detection runs before alignment, not after.** Alignment pairs unmatched lines by
   similarity, so by the time rows exist the moved block has already been paired off against
@@ -232,7 +232,7 @@ test asserting exactly that. *Met* — and checked against git: on the same pure
   of it is aligned — worth doing, not done here, and stated rather than implied.
 - **Whitespace modes normalise what is compared, never what is shown** (`-w`, `-b`). A line still
   renders exactly as it is on disk; normalising for display would turn "your reformatting is
-  hidden" into "gdiff lied about the file".
+  hidden" into "increment lied about the file".
 - **`+0 -0 ~0` was a bug.** A diff that is entirely a move reported no additions, no removals and
   no edits, which reads as nothing having happened. Move counts now appear in the split header,
   the browser's file list and its status line — the same failure the file list had in phase 4.
@@ -245,8 +245,8 @@ constraint.** tree-sitter's core is C (`lib.c`, `stack.c`, `lexer.c`) and every 
 design, and puts a C toolchain in the path of every build on every platform.
 
 That is a constraint conflict rather than a scheduling problem. **Decided: ceded to difftastic.**
-It is what difftastic is excellent at, gdiff's pitch is alignment rather than syntax-awareness,
-and the two compose — `difft` for "what changed semantically", `gdiff` for "show me the two
+It is what difftastic is excellent at, increment's pitch is alignment rather than syntax-awareness,
+and the two compose — `difft` for "what changed semantically", `inc` for "show me the two
 versions". The alternatives considered and rejected: relaxing the constraint behind an
 off-by-default cargo feature (then "pure Rust, no C toolchain" is true only of the default
 features, and `make pure-rust` has to know the difference), and waiting for a pure-Rust parsing
@@ -281,9 +281,9 @@ formula works on this machine.
 2. ~~**The change map** — right-edge minimap column in stdout mode too, or TUI only?~~
    **Answered during phase 2: TUI only.** In a pager it restates the gutter.
 3. ~~**Pager mode** — worth shipping given it structurally cannot do folding or the change map,
-   or skip it and stand on `git difftool` plus `gdiff git`?~~ **Answered in phase 3: shipped,
+   or skip it and stand on `git difftool` plus `inc git`?~~ **Answered in phase 3: shipped,
    with its limits stated where someone configuring it will read them.** It re-diffs each hunk,
-   so the pairing and emphasis are still gdiff's.
+   so the pairing and emphasis are still increment's.
 4. ~~**Structural diff** — a real goal for this project, or explicitly ceded to difftastic?~~
    **Answered 2026-08-26: ceded.** tree-sitter is C, so it cannot be added without breaking
    "pure Rust, no C toolchain". See the phase 5 note above.

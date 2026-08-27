@@ -9,7 +9,7 @@
 //! full.
 //!
 //! What this *does* do is re-diff each hunk's two sides, so the pairing and the
-//! word-level emphasis are gdiff's rather than git's. Between hunks it emits a
+//! word-level emphasis are increment's rather than git's. Between hunks it emits a
 //! fold carrying the gap the hunk headers imply, which is exactly as much as
 //! the patch knows.
 

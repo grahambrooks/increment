@@ -1,16 +1,33 @@
-# gdiff
+# increment
 
 A diff visualizer for the terminal: the **aligned side-by-side view**, rendered
-as structured output.
+as structured output. The command is `inc`.
 
 Two syntax-highlighted panes, a shared line-number gutter, corresponding lines
 level with each other, block colour by change kind, word-level highlighting
 inside modified lines, unchanged regions folded, and a change map down the
 right edge — the JetBrains diff view, in a terminal, in a pipe.
 
+## Install
+
+Not on crates.io — `increment`, `inc` and `incr` are all taken there. It ships
+from GitHub.
+
+```sh
+brew tap grahambrooks/increment https://github.com/grahambrooks/increment
+brew install increment
+```
+
+Or take a binary from [the releases](https://github.com/grahambrooks/increment/releases),
+or build from source:
+
+```sh
+cargo install --git https://github.com/grahambrooks/increment
+```
+
 ## Status
 
-**Phases 0–5 done.** gdiff diffs files or a git repository and renders them
+**Phases 0–5 done.** increment diffs files or a git repository and renders them
 side by side — as styled stdout, as JSON, or in an interactive browser — with
 alignment, word-level highlighting, folding, syntax colour and move detection.
 The per-phase criteria and what was deliberately not built are in
@@ -21,24 +38,24 @@ equal wall of additions somewhere else — `<` where it left, `>` where it
 arrived. Detection is within a file; a block moved between files is not caught.
 
 ```sh
-gdiff old.rs new.rs              # two files; splits if the terminal is wide enough
-gdiff --whole-file old.rs new.rs # …showing every line, not just what changed
-gdiff git                        # HEAD against the working tree
-gdiff git HEAD~2                 # a revision against the working tree
-gdiff git main..feature          # one revision against another
-gdiff git HEAD~1..HEAD src       # …restricted to a path
-gdiff --format json old.rs new.rs
+inc old.rs new.rs              # two files; splits if the terminal is wide enough
+inc --whole-file old.rs new.rs # …showing every line, not just what changed
+inc git                        # HEAD against the working tree
+inc git HEAD~2                 # a revision against the working tree
+inc git main..feature          # one revision against another
+inc git HEAD~1..HEAD src       # …restricted to a path
+inc --format json old.rs new.rs
 ```
 
-Exit codes follow `diff(1)`, so `gdiff git` in a script says whether anything
+Exit codes follow `diff(1)`, so `inc git` in a script says whether anything
 changed.
 
 ## Reviewing a branch
 
 ```sh
-gdiff review                     # the current branch
-gdiff review main..feature       # a range
-gdiff review --limit 500 HEAD    # …further back
+inc review                     # the current branch
+inc review main..feature       # a range
+inc review --limit 500 HEAD    # …further back
 ```
 
 A commit list with the working tree at the top of it; `Enter` opens what that
@@ -65,7 +82,7 @@ looking at one file's history without re-selecting it each time.
 ## The browser
 
 ```sh
-gdiff --ui tui git
+inc --ui tui git
 ```
 
 A file list, the split view, and a change map down the right edge showing what
@@ -114,13 +131,13 @@ into a file.
 
 ## Git
 
-gdiff reads the repository directly, in process — it never shells out to `git`,
+increment reads the repository directly, in process — it never shells out to `git`,
 and there is no runtime dependency on it.
 
 ### As a difftool
 
 ```sh
-git config --global difftool.gdiff.cmd 'gdiff "$LOCAL" "$REMOTE"'
+git config --global difftool.increment.cmd 'increment "$LOCAL" "$REMOTE"'
 git config --global difftool.prompt false
 git difftool -y HEAD~1
 ```
@@ -128,18 +145,18 @@ git difftool -y HEAD~1
 ### As a pager
 
 ```sh
-git config --global core.pager 'gdiff --patch'
+git config --global core.pager 'inc --patch'
 ```
 
 **This path is deliberately lower fidelity, and it is worth knowing why.** A
 pager is handed the diff git already decided to print — a few lines of context
 around each change and nothing else. The files themselves are not available, so
 there is no whole-file view, nothing to fold that git has not already folded,
-and no way to re-diff a region with different settings. gdiff still re-diffs
+and no way to re-diff a region with different settings. increment still re-diffs
 each hunk, so the pairing and the word-level highlighting are its own, and it
 marks the gaps between hunks with what the hunk headers imply.
 
-Where the choice exists, `gdiff git` is the better path: it reads both sides in
+Where the choice exists, `inc git` is the better path: it reads both sides in
 full.
 
 | Flag | |
@@ -164,7 +181,7 @@ full.
 `delta` owns the styled pager. `difftastic` owns structural diff. Neither of
 them, and none of the split renderers, reproduces the thing that makes a
 JetBrains diff readable: **alignment** — correspondence between the two sides
-made visible, with folding and a whole-file overview. That is the gap gdiff
+made visible, with folding and a whole-file overview. That is the gap increment
 fills. The survey behind that claim is
 [`design/001-visual-diff-state-of-the-art.md`](design/001-visual-diff-state-of-the-art.md).
 

@@ -1,4 +1,4 @@
-# 001 — Visual diff: state of the art and options for gdiff
+# 001 — Visual diff: state of the art and options for increment
 
 Status: draft for review · Date: 2026-08-26 · Supersedes: nothing
 
@@ -8,7 +8,7 @@ change kind, word-level highlight inside modified lines, unchanged regions colla
 change map down the right edge.
 
 This document surveys what exists, extracts the techniques that actually make a diff readable,
-and lists the options open to gdiff with a recommendation for each. The plan that follows from
+and lists the options open to increment with a recommendation for each. The plan that follows from
 it is `002-architecture-and-plan.md`.
 
 ---
@@ -22,7 +22,7 @@ it is `002-architecture-and-plan.md`.
 | **delta** | Rust | The bar to clear. Syntax highlighting via syntect, side-by-side mode with line numbers in both panes, word-level highlight, hyperlinks, blame and grep decoration, 20+ themes. Works as `core.pager`, so it re-parses git's *unified* output rather than re-diffing content. |
 | **diff-so-fancy** | Perl | Popularised removing the `+`/`-` noise and highlighting the changed substring rather than the whole line. |
 | **riff** | Rust | Focused entirely on intra-line highlighting quality — which characters actually changed. |
-| **git-split-diffs**, **dunk**, **icdiff** | TS / Python / Python | Split (side-by-side) rendering in a terminal, i.e. the layout gdiff wants. All three show the same two hard problems: what to do when the pane is too narrow, and how to align the two sides. |
+| **git-split-diffs**, **dunk**, **icdiff** | TS / Python / Python | Split (side-by-side) rendering in a terminal, i.e. the layout increment wants. All three show the same two hard problems: what to do when the pane is too narrow, and how to align the two sides. |
 | **diffnav**, **critique**, **drft** | Go / Rust | The next layer up: a *browser* — file tree plus diff pane, i.e. review as a TUI rather than a pager. |
 
 Takeaway: the styled-pager niche is solved and crowded. The *side-by-side with real alignment*
@@ -78,7 +78,7 @@ engine is the slower one.
 
 ---
 
-## 2. Where gdiff fits
+## 2. Where increment fits
 
 **Positioning: the JetBrains split view, in the terminal, as structured output.**
 
@@ -181,7 +181,7 @@ a theme, truecolor with a 256- and 16-colour fallback, a colourblind-safe theme,
 ## 4. Deliberately not building
 
 Recorded so a later session does not "complete" them: three-way merge and conflict resolution,
-editing (gdiff is a viewer), a GUI, a directory-tree review UI in v1, an in-process plugin API,
+editing (increment is a viewer), a GUI, a directory-tree review UI in v1, an in-process plugin API,
 and automatic crates.io publishing.
 
 ---

@@ -1,8 +1,17 @@
-# Graham's Diff (`gdiff`)
+# increment
 
 A command line and terminal UI Rust diff visualizer that presents diffs in a more human-readable
 way. It highlights changes, additions and deletions clearly, making it easier to understand the
 differences between two files or sets of code.
+
+**The command is `inc`.** Not `in`: that is a reserved word in bash and `sh`, where a bare
+`in --help` is a syntax error rather than a command — and git runs pagers and difftools through
+`sh -c`, so it would have broken exactly the integrations this tool exists for. `gdiff` was the
+working codename and is gone; it was also already taken on crates.io.
+
+**Nothing is published to crates.io.** `increment`, `inc` and `incr` are all taken there, so the
+tool ships from GitHub: release binaries and an in-repo Homebrew formula. `publish = false` in
+`Cargo.toml` makes a stray `cargo publish` fail locally rather than at the registry.
 
 The reference target is the JetBrains diff view (`JetBrainsDiff.png`): two syntax-highlighted
 panes side by side, a shared line-number gutter, corresponding lines aligned across the panes,
@@ -22,10 +31,10 @@ Read these before writing code — the decisions are made there, not re-derived 
 ## Positioning
 
 Not another styled pager — `delta` owns that. Not a structural differ — `difftastic` owns that.
-gdiff is the **aligned split view in the terminal**: correspondence between the two sides made
+increment is the **aligned split view in the terminal**: correspondence between the two sides made
 visible, with folding and a whole-file change map.
 
-Since 2026-08-26 it also **reviews a branch**: `gdiff review` lists commits and shows what each
+Since 2026-08-26 it also **reviews a branch**: `inc review` lists commits and shows what each
 one did, in the same split view. That is a deliberate widening from "render this diff" — see
 `design/003-review-flow.md`. It is still not a git browser, and the line in §2 of that document
 is what keeps it from becoming one.
@@ -49,7 +58,7 @@ is what keeps it from becoming one.
 ## Deliberately out of scope
 
 Recorded so a later session does not "complete" something that was cut on purpose: three-way
-merge and conflict resolution, editing (gdiff is a viewer), a GUI, an in-process plugin API, and
+merge and conflict resolution, editing (increment is a viewer), a GUI, an in-process plugin API, and
 automatic crates.io publishing.
 
 **Structural diff is ceded to difftastic**, decided 2026-08-26. tree-sitter's core and every
@@ -57,7 +66,7 @@ grammar are C compiled through `cc`, so it cannot be added without breaking the 
 constraint above. Do not reintroduce `--structural`. See `design/002` §"Structural diff".
 
 Staging, tree/blob browsing, blame and refs views are **not** part of the review flow either —
-that line is what keeps gdiff a diff viewer rather than a second git browser. See `design/003`.
+that line is what keeps increment a diff viewer rather than a second git browser. See `design/003`.
 
 ## Workflow
 

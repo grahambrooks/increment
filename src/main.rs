@@ -1,4 +1,4 @@
-//! The `gdiff` binary: a thin shell over the library.
+//! The `inc` binary: a thin shell over the library.
 //!
 //! It resolves what was asked for, asks a source for the files, asks the
 //! library for a document per file, hands each to a renderer, and maps the
@@ -9,13 +9,13 @@ use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
 
 use clap::Parser;
-use gdiff::cli::args::{Args, Format, Source};
-use gdiff::cli::surface;
-use gdiff::highlight::Highlighting;
-use gdiff::model::DiffDocument;
-use gdiff::source::{self, Changes, Comparison};
-use gdiff::tui;
-use gdiff::{diff, exit, render};
+use increment::cli::args::{Args, Format, Source};
+use increment::cli::surface;
+use increment::highlight::Highlighting;
+use increment::model::DiffDocument;
+use increment::source::{self, Changes, Comparison};
+use increment::tui;
+use increment::{diff, exit, render};
 
 fn main() -> ExitCode {
     let args = Args::parse();
@@ -23,7 +23,7 @@ fn main() -> ExitCode {
     match run(&args) {
         Ok(code) => ExitCode::from(code as u8),
         Err(message) => {
-            eprintln!("gdiff: {message}");
+            eprintln!("inc: {message}");
             ExitCode::from(exit::TROUBLE as u8)
         }
     }
@@ -243,7 +243,7 @@ fn write(
 
     match result {
         Ok(()) => Ok(changed),
-        // Someone closed the pipe — `gdiff git | head`. The reader got what it
+        // Someone closed the pipe — `inc git | head`. The reader got what it
         // asked for, so this is a normal end, not a failure.
         Err(error) if error.kind() == std::io::ErrorKind::BrokenPipe => Ok(changed),
         Err(error) => Err(format!("writing output: {error}")),
