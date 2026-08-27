@@ -1,0 +1,41 @@
+src/tui/draw.rs
+  s_3c463378fb2c1d::t_623958b857c7d1 18,230-235,260-265
+src/tui/keys.rs
+  s_3c463378fb2c1d::t_0352175aecfa48 47-49
+  s_3c463378fb2c1d::t_623958b857c7d1 113-119,284-304,306
+  s_3c463378fb2c1d::t_57f1100c4c94d5 305,307
+src/tui/state.rs
+  s_3c463378fb2c1d::t_899e07b7c661d2 928,936-1025
+  s_3c463378fb2c1d::t_623958b857c7d1 313-317
+  s_3c463378fb2c1d::t_acc3e683c82a44 117-118,213-227,309-312,318-331,343-349
+  s_3c463378fb2c1d::t_72208ff8950d11 1026
+src/tui/review.rs
+  s_3c463378fb2c1d::t_0352175aecfa48 19,252,267-304,379-382,385
+  s_3c463378fb2c1d::t_0f9eff80f92f80 438-441,675-750
+  s_3c463378fb2c1d::t_c26a99165a46ae 751
+tests/tui_layout.rs
+  s_3c463378fb2c1d::t_49e35d12530809 354-371,376-420
+  s_3c463378fb2c1d::t_d4fe05530706f7 372-375
+README.md
+  s_3c463378fb2c1d::t_bcc323523e42b2 56,60-62,79,82,85-88
+design/003-review-flow.md
+  s_3c463378fb2c1d::t_a88c402875227f 154-174
+tests/snapshots/tui_layout__the_file_list_in_a_review_can_be_focused.snap
+  s_3c463378fb2c1d::t_480b4003511595 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b69d069e73c7790d04798d5d73185a81c7c1ae06",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
