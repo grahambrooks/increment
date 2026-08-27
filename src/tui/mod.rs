@@ -87,14 +87,25 @@ fn review_loop(
     while !review.should_quit() {
         terminal.draw(|frame| draw::review(frame, review))?;
 
-        // A deferred diff, done only when the reader has stopped moving. Holding
-        // `j` down the log stays instant; the diff catches up on the pause.
-        if review.needs_settle() && !event::poll(Duration::ZERO)? {
-            review.settle();
-            continue;
+        // Deferred work, done only when the reader has stopped moving: the
+        // diff of the commit they landed on, and then its colours. Holding `j`
+        // down the log stays instant, and a commit draws before it is coloured.
+        if !event::poll(Duration::ZERO)? {
+            if review.needs_settle() {
+                review.settle();
+                continue;
+            }
+            if review.diff().is_some_and(App::needs_colour) {
+                if let Some(diff) = review.diff_mut() {
+                    diff.colour_now();
+                }
+                continue;
+            }
         }
 
-        let busy = review.loading() || review.needs_settle();
+        let busy = review.loading()
+            || review.needs_settle()
+            || review.diff().is_some_and(App::needs_colour);
         if busy && !event::poll(TICK)? {
             drain(review, incoming);
             continue;
@@ -141,6 +152,14 @@ fn drain(review: &mut Review<'_>, incoming: Option<&Incoming>) {
 fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> std::io::Result<()> {
     while !app.should_quit() {
         terminal.draw(|frame| draw::draw(frame, app))?;
+
+        // Colour arrives on the frame after the diff does. Highlighting one
+        // file can cost more than everything else about opening it, and a
+        // plain frame now beats a coloured one in a second.
+        if app.needs_colour() && !event::poll(Duration::ZERO)? {
+            app.colour_now();
+            continue;
+        }
 
         // Only key *presses*: a terminal that reports releases and repeats
         // would otherwise move three rows for one keystroke.

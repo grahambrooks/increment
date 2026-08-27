@@ -28,6 +28,27 @@ use crate::model::Span;
 /// Beyond this many lines, a file is shown without syntax colour.
 const MAX_LINES: usize = 20_000;
 
+/// How long one file may spend being coloured before it is left as it is.
+///
+/// A line-count cap does not catch the case that actually hurts. This project's
+/// own README — 176 lines of markdown with tables in it — takes **1.6 seconds**
+/// to highlight in a debug build and 120ms in release, while a markdown file of
+/// the same length beside it takes 98ms and 9ms. That is catastrophic
+/// backtracking in `fancy-regex`, the pure-Rust engine chosen over `onig`, and
+/// no bound on *size* will find it.
+///
+/// Whatever was coloured before the budget ran out is kept, so the top of the
+/// file — which is what the parser reaches first, and usually what is on screen
+/// — still has colour.
+const BUDGET: std::time::Duration = std::time::Duration::from_millis(120);
+
+// The clock is read on every line, not every sixteenth. Reading it costs
+// nanoseconds against milliseconds of regex work, and striding overshoots
+// badly in exactly the case the budget exists for: one pathological line can
+// take 50ms on its own, so a stride of sixteen ran 900ms past a 120ms budget.
+// The bound is now the budget plus one line, which is the best that can be
+// done without preempting mid-line.
+
 /// A line's colours, as byte ranges into that line.
 pub type Colours = Vec<(Span, Color)>;
 
@@ -52,9 +73,14 @@ impl Highlighting {
     }
 
     pub fn of(old: &crate::model::SourceFile, new: &crate::model::SourceFile) -> Self {
+        // Half the budget each, rather than a whole one each. A pair is one
+        // file to the reader, and spending the budget twice makes the cap say
+        // one thing and do another. Halving also stops the old side using it
+        // all and leaving the new side — the one being read — with none.
+        let each = BUDGET / 2;
         Self {
-            old: colour_file(&old.name, &old.lines),
-            new: colour_file(&new.name, &new.lines),
+            old: colour_within(&old.name, &old.lines, each),
+            new: colour_within(&new.name, &new.lines, each),
         }
     }
 
@@ -100,6 +126,14 @@ fn theme() -> &'static SyntectTheme {
 /// `name` selects the language by extension. An unknown extension yields empty
 /// colours for every line.
 pub fn colour_file(name: &str, lines: &[String]) -> Vec<Colours> {
+    colour_within(name, lines, BUDGET)
+}
+
+/// [`colour_file`], with the time budget given rather than assumed.
+///
+/// Separate so a test can prove the budget does something, by comparing a
+/// generous one against a mean one on the same input.
+pub fn colour_within(name: &str, lines: &[String], budget: std::time::Duration) -> Vec<Colours> {
     let empty = || vec![Colours::new(); lines.len()];
 
     // Measured at roughly 60–80ms for a few hundred lines in release, and the
@@ -119,20 +153,30 @@ pub fn colour_file(name: &str, lines: &[String]) -> Vec<Colours> {
     };
 
     let mut highlighter = HighlightLines::new(syntax, theme());
-    lines
-        .iter()
-        .map(|line| {
-            // The syntax definitions expect newline-terminated input; ours are
-            // stored without terminators.
-            let terminated = format!("{line}\n");
-            match highlighter.highlight_line(&terminated, syntaxes) {
-                Ok(regions) => spans(line, &regions),
-                // A parser that gives up mid-file leaves the rest uncoloured
-                // rather than taking the diff down with it.
-                Err(_) => Colours::new(),
-            }
-        })
-        .collect()
+    let started = std::time::Instant::now();
+    let mut out = Vec::with_capacity(lines.len());
+
+    for line in lines {
+        if started.elapsed() > budget {
+            // Out of time. Everything from here on is plain, which is a diff
+            // that draws now rather than a prettier one that draws in a second.
+            out.resize(lines.len(), Colours::new());
+            break;
+        }
+
+        // The syntax definitions expect newline-terminated input; ours are
+        // stored without terminators.
+        let terminated = format!("{line}\n");
+        out.push(match highlighter.highlight_line(&terminated, syntaxes) {
+            Ok(regions) => spans(line, &regions),
+            // A parser that gives up mid-file leaves the rest uncoloured
+            // rather than taking the diff down with it.
+            Err(_) => Colours::new(),
+        });
+    }
+
+    debug_assert_eq!(out.len(), lines.len());
+    out
 }
 
 /// Convert syntect's `(style, text)` regions into byte ranges and colours.
@@ -169,6 +213,7 @@ fn extension(name: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
 
     fn lines(text: &str) -> Vec<String> {
         text.lines().map(str::to_owned).collect()
@@ -202,6 +247,63 @@ mod tests {
         let coloured = colour_file("notes.unheardof", &source);
         assert_eq!(coloured.len(), 2);
         assert!(coloured.iter().all(Vec::is_empty));
+    }
+
+    /// Markdown that is slow but not absurd — the shape of the real case.
+    fn slow_markdown() -> Vec<String> {
+        (0..300)
+            .map(|n| format!("| **a{n}** *b* `c` | [d](e) **_f_** | *g* *h* *i* |"))
+            .collect()
+    }
+
+    #[test]
+    fn the_budget_stops_a_slow_file_early_and_keeps_what_it_had() {
+        // Not a size problem — this is 300 short lines. Nested emphasis and
+        // tables are what make the markdown definition backtrack, and no bound
+        // on *size* finds that. Only the clock does.
+        let source = slow_markdown();
+
+        let generous = Instant::now();
+        let all = colour_within("slow.md", &source, Duration::from_secs(60));
+        let generous = generous.elapsed();
+
+        let mean = Instant::now();
+        let some = colour_within("slow.md", &source, Duration::from_millis(1));
+        let mean = mean.elapsed();
+
+        // Every line still has an entry either way; only the colour is missing.
+        assert_eq!(all.len(), source.len());
+        assert_eq!(some.len(), source.len());
+
+        assert!(
+            some.iter().any(Vec::is_empty),
+            "the budget never bit, so this proves nothing"
+        );
+        assert!(
+            mean < generous,
+            "a 1ms budget ({mean:?}) was no faster than an unbounded one ({generous:?})"
+        );
+    }
+
+    #[test]
+    fn what_the_budget_manages_to_colour_is_the_start_of_the_file() {
+        // The parser runs forwards from line one, so a partial result is the
+        // top of the file — which is the part most likely to be on screen.
+        let source = slow_markdown();
+        let some = colour_within("slow.md", &source, Duration::from_millis(30));
+
+        let coloured = some.iter().take_while(|line| !line.is_empty()).count();
+        let plain = some
+            .iter()
+            .skip(coloured)
+            .filter(|line| line.is_empty())
+            .count();
+        assert!(coloured > 0, "nothing was coloured at all");
+        assert_eq!(
+            coloured + plain,
+            source.len(),
+            "the coloured lines should be a prefix, not scattered"
+        );
     }
 
     #[test]

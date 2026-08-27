@@ -16,61 +16,117 @@ use crate::model::{DiffDocument, RowKind};
 use crate::render::Options;
 use crate::render::split::{VisualRow, compose};
 
+/// A value computed the first time it is wanted, if ever.
+struct Lazy<T> {
+    value: OnceCell<T>,
+    source: Option<Box<dyn Fn() -> T>>,
+}
+
+impl<T> Lazy<T> {
+    fn ready(value: T) -> Self {
+        let cell = OnceCell::new();
+        let _ = cell.set(value);
+        Self {
+            value: cell,
+            source: None,
+        }
+    }
+
+    fn deferred(source: impl Fn() -> T + 'static) -> Self {
+        Self {
+            value: OnceCell::new(),
+            source: Some(Box::new(source)),
+        }
+    }
+
+    fn is_ready(&self) -> bool {
+        self.value.get().is_some()
+    }
+
+    /// The value, computing it now if it has not been computed.
+    fn force(&self) -> &T
+    where
+        T: Default,
+    {
+        self.value.get_or_init(|| match &self.source {
+            Some(source) => source(),
+            None => T::default(),
+        })
+    }
+
+    /// The value if it is already known, without computing it.
+    fn peek(&self) -> Option<&T> {
+        self.value.get()
+    }
+}
+
 /// One file in the browser.
 pub struct Entry {
     pub document: DiffDocument,
-    /// The same comparison with nothing folded, where the sources were
-    /// available to compute it.
+    /// The same comparison with nothing folded.
     ///
-    /// `None` for a patch: it never carried the hidden lines, so there is
-    /// nothing to unfold and saying so is better than a key that does nothing.
-    pub unfolded: Option<DiffDocument>,
-    /// Computed the first time this file is actually drawn.
+    /// Deferred: it is only wanted if the reader presses `f`, and computing it
+    /// on load doubled the diffing done for every file in a commit to serve a
+    /// key most of them never get.
     ///
-    /// Highlighting costs tens of milliseconds per file, and a commit changing
-    /// twenty files shows one of them at a time. Doing all twenty up front
-    /// meant a second of dead terminal on every commit opened — and with the
-    /// review's cursor tracking, on every press of the down arrow.
-    highlighting: OnceCell<Highlighting>,
-    source: Option<Box<dyn Fn() -> Highlighting>>,
+    /// Resolves to `None` for a patch, which never carried the hidden lines —
+    /// so there is nothing to unfold, and saying so beats a key that does
+    /// nothing.
+    unfolded: Lazy<Option<DiffDocument>>,
+    /// Deferred for a different reason: it is slow. Highlighting one file can
+    /// cost more than everything else about loading a commit put together, so
+    /// the first frame is drawn without it and it arrives on the next.
+    highlighting: Lazy<Highlighting>,
 }
 
 impl Entry {
-    /// An entry whose highlighting is already known — or is `none`.
+    /// An entry whose parts are already known.
     pub fn new(
         document: DiffDocument,
         unfolded: Option<DiffDocument>,
         highlighting: Highlighting,
     ) -> Self {
-        let cell = OnceCell::new();
-        let _ = cell.set(highlighting);
         Self {
             document,
-            unfolded,
-            highlighting: cell,
-            source: None,
+            unfolded: Lazy::ready(unfolded),
+            highlighting: Lazy::ready(highlighting),
         }
     }
 
-    /// An entry that highlights itself when it is first drawn.
+    /// An entry that computes its expensive parts when they are first wanted.
     pub fn lazy(
         document: DiffDocument,
-        unfolded: Option<DiffDocument>,
-        source: impl Fn() -> Highlighting + 'static,
+        unfolded: impl Fn() -> Option<DiffDocument> + 'static,
+        highlighting: impl Fn() -> Highlighting + 'static,
     ) -> Self {
         Self {
             document,
-            unfolded,
-            highlighting: OnceCell::new(),
-            source: Some(Box::new(source)),
+            unfolded: Lazy::deferred(unfolded),
+            highlighting: Lazy::deferred(highlighting),
         }
     }
 
-    pub fn highlighting(&self) -> &Highlighting {
-        self.highlighting.get_or_init(|| match &self.source {
-            Some(source) => source(),
-            None => Highlighting::none(),
-        })
+    /// The unfolded document, computing it if this is the first ask.
+    pub fn unfolded(&self) -> Option<&DiffDocument> {
+        self.unfolded.force().as_ref()
+    }
+
+    /// Colours if they have been computed; otherwise none, without computing.
+    pub fn colours(&self) -> &Highlighting {
+        static NONE: std::sync::OnceLock<Highlighting> = std::sync::OnceLock::new();
+        self.highlighting
+            .peek()
+            .unwrap_or_else(|| NONE.get_or_init(Highlighting::none))
+    }
+
+    /// Whether the colours are still owed.
+    pub fn needs_colour(&self) -> bool {
+        !self.highlighting.is_ready()
+    }
+
+    /// Compute the colours now.
+    pub fn colour_now(&self) {
+        let _ = self.highlighting.force();
     }
 
     pub fn name(&self) -> &str {
@@ -225,6 +281,22 @@ impl App {
         self.entries.len() > 1
     }
 
+    /// Whether the file on show is still waiting for its colours.
+    ///
+    /// The event loop asks when no keypress is queued, so a commit draws
+    /// immediately and gains colour a frame later instead of stalling on it.
+    pub fn needs_colour(&self) -> bool {
+        self.entry().is_some_and(Entry::needs_colour)
+    }
+
+    /// Colour the file on show, and lay it out again with the result.
+    pub fn colour_now(&mut self) {
+        if let Some(entry) = self.entry() {
+            entry.colour_now();
+        }
+        self.relayout();
+    }
+
     pub fn search(&self) -> &Search {
         &self.search
     }
@@ -245,7 +317,7 @@ impl App {
     pub fn document(&self) -> Option<&DiffDocument> {
         let entry = self.entry()?;
         Some(if self.unfolded {
-            entry.unfolded.as_ref().unwrap_or(&entry.document)
+            entry.unfolded().unwrap_or(&entry.document)
         } else {
             &entry.document
         })
@@ -387,7 +459,7 @@ impl App {
     }
 
     fn toggle_fold(&mut self) {
-        let available = self.entry().is_some_and(|entry| entry.unfolded.is_some());
+        let available = self.entry().is_some_and(|entry| entry.unfolded().is_some());
         if !available {
             self.notice =
                 Some("this diff came from a patch; the hidden lines were never in it".to_owned());
@@ -432,7 +504,7 @@ impl App {
 
     fn relayout(&mut self) {
         self.layout = match (self.document(), self.entry()) {
-            (Some(document), Some(entry)) => compose(document, entry.highlighting(), &self.options),
+            (Some(document), Some(entry)) => compose(document, entry.colours(), &self.options),
             _ => Vec::new(),
         };
         // Any recorded match positions refer to the old layout.
@@ -777,8 +849,16 @@ mod tests {
 
     #[test]
     fn a_patch_diff_says_why_it_cannot_unfold() {
-        let mut entry = entry("a\nb\n", "a\nc\n", Some(3));
-        entry.unfolded = None;
+        // A patch-shaped entry: no sources, so nothing to unfold.
+        let entry = Entry::new(
+            compare(
+                &SourceFile::from_text("a/f.rs", "a\nb\n"),
+                &SourceFile::from_text("b/f.rs", "a\nc\n"),
+                &DiffOptions::default(),
+            ),
+            None,
+            Highlighting::none(),
+        );
 
         let mut app = app(vec![entry], 10);
         app.apply(Action::ToggleFold);

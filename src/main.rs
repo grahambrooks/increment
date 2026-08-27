@@ -150,22 +150,34 @@ fn review(
             .iter()
             .map(|pair| {
                 let document = diff::compare(&pair.old, &pair.new, &diff_options);
-                let unfolded = diff::compare(
-                    &pair.old,
-                    &pair.new,
-                    &diff::Options {
-                        context: None,
-                        ..diff_options
+
+                // Both expensive parts wait until something asks for them: the
+                // unfolded document until `f` is pressed, and the colours until
+                // the frame after this file is first drawn. Doing either on load
+                // is what made opening a commit take a second or two.
+                let whole = (pair.old.clone(), pair.new.clone());
+                let colours = (pair.old.clone(), pair.new.clone());
+
+                tui::Entry::lazy(
+                    document,
+                    move || {
+                        Some(diff::compare(
+                            &whole.0,
+                            &whole.1,
+                            &diff::Options {
+                                context: None,
+                                ..diff_options
+                            },
+                        ))
                     },
-                );
-                let (old, new) = (pair.old.clone(), pair.new.clone());
-                tui::Entry::lazy(document, Some(unfolded), move || {
-                    if syntax {
-                        Highlighting::of(&old, &new)
-                    } else {
-                        Highlighting::none()
-                    }
-                })
+                    move || {
+                        if syntax {
+                            Highlighting::of(&colours.0, &colours.1)
+                        } else {
+                            Highlighting::none()
+                        }
+                    },
+                )
             })
             .collect())
     });
@@ -189,24 +201,33 @@ fn browse(
         .iter()
         .filter(|(document, _)| document.has_changes())
         .map(|(document, pair)| {
-            // Unfolding needs the sources. A patch never had them, so the
-            // browser says so rather than offering a key that does nothing.
-            let unfolded = pair.map(|pair| {
-                diff::compare(
-                    &pair.old,
-                    &pair.new,
-                    &diff::Options {
-                        context: None,
-                        ..args.diff_options()
-                    },
-                )
-            });
             let syntax = args.syntax_enabled(&options.theme);
-            let sources = pair.map(|pair| (pair.old.clone(), pair.new.clone()));
-            tui::Entry::lazy(document.clone(), unfolded, move || match &sources {
-                Some((old, new)) if syntax => Highlighting::of(old, new),
-                _ => Highlighting::none(),
-            })
+            let diff_options = args.diff_options();
+            // Both expensive parts wait until something asks. Unfolding also
+            // needs the sources, which a patch never had — so it resolves to
+            // `None` there rather than offering a key that does nothing.
+            let whole = pair.map(|pair| (pair.old.clone(), pair.new.clone()));
+            let colours = whole.clone();
+
+            tui::Entry::lazy(
+                document.clone(),
+                move || {
+                    whole.as_ref().map(|(old, new)| {
+                        diff::compare(
+                            old,
+                            new,
+                            &diff::Options {
+                                context: None,
+                                ..diff_options
+                            },
+                        )
+                    })
+                },
+                move || match &colours {
+                    Some((old, new)) if syntax => Highlighting::of(old, new),
+                    _ => Highlighting::none(),
+                },
+            )
         })
         .collect();
 
