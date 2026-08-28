@@ -74,7 +74,8 @@ version:
 .PHONY: release-dry
 release-dry:
 	@echo 'would set version to $(VERSION) and tag $(TAG)'
-	@echo 'crates.io publishing stays manual — it is the irreversible step'
+	@echo 'pushing the tag builds the binaries, publishes a GitHub Release,'
+	@echo 'and commits the Homebrew formula pinned to their checksums'
 	@echo "currently: $$(grep -m1 '^version = ' Cargo.toml)"
 
 .PHONY: release-guard
