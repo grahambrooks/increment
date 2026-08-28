@@ -76,9 +76,10 @@ fn run(args: &Args) -> Result<i32, String> {
 
 fn read(args: &Args, diff_options: &diff::Options) -> Result<Changes, String> {
     match args.source()? {
-        Source::Files { old, new } => {
-            source::files::compare(old, new).map_err(|error| format!("{}: {error}", old.display()))
-        }
+        // No wrapping: the error already names the path that failed, and
+        // prefixing it with the first one reports both and leads with the
+        // wrong one.
+        Source::Files { old, new } => source::files::compare(old, new),
         Source::Git { rev, paths } => {
             source::git::compare(rev, paths).map_err(|error| error.to_string())
         }

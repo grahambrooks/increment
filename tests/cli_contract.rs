@@ -107,6 +107,12 @@ fn a_missing_file_is_trouble_not_a_difference() {
     assert_eq!(output.status.code(), Some(2), "exit code");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("/nonexistent/increment"), "{stderr}");
+    // …and only that one. Naming the file that was fine sends the reader to
+    // look at the wrong thing — `contains` alone let that through once.
+    assert!(
+        !stderr.contains(&pair.old.display().to_string()),
+        "the error names the file that was readable too: {stderr}"
+    );
 }
 
 #[test]
