@@ -1,0 +1,21 @@
+src/main.rs
+  s_3c463378fb2c1d::t_73892fd9054160 79-82
+tests/cli_contract.rs
+  s_3c463378fb2c1d::t_73892fd9054160 110-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0ba3567045251bbbd73e2c644c8449c920f88ae5",
+  "prompts": {},
+  "sessions": {
+    "s_3c463378fb2c1d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5df28ff-8b89-45af-8483-49c238f4dd0f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Graham Brooks <graham@grahambrooks.com>"
+    }
+  }
+}
