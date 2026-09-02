@@ -10,8 +10,8 @@ class Increment < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/grahambrooks/increment/releases/download/v2026.8.0/increment-v2026.8.0-aarch64-apple-darwin.tar.gz"
-      sha256 "762c2dcf53053701be5d243684db6d17cd5dadc280912f22f531314fb0a7e7d6"
+      url "https://github.com/grahambrooks/increment/archive/refs/tags/v2026.9.1.tar.gz"
+      sha256 "da3df69e4662acfc725bac79c3fa9d399d38437666bdb7b5da7f0e72dd36db26"
     elsif Hardware::CPU.intel?
       url "https://github.com/grahambrooks/increment/releases/download/v2026.8.0/increment-v2026.8.0-x86_64-apple-darwin.tar.gz"
       sha256 "e1b4accd82bc6c0477425a8817ca8ae4748ca2d5b02e0d83f19738cb8c608dd9"
