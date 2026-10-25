@@ -8,6 +8,8 @@ level with each other, block colour by change kind, word-level highlighting
 inside modified lines, unchanged regions folded, and a change map down the
 right edge — the JetBrains diff view, in a terminal, in a pipe.
 
+![inc showing a split diff: two syntax-highlighted panes with a shared line-number gutter, a modified line with the changed word highlighted on each side, added lines facing blank space on the left, and unchanged regions folded](docs/split-view.png)
+
 ## Install
 
 Not on crates.io — `increment`, `inc` and `incr` are all taken there. It ships
@@ -137,7 +139,7 @@ and there is no runtime dependency on it.
 ### As a difftool
 
 ```sh
-git config --global difftool.increment.cmd 'increment "$LOCAL" "$REMOTE"'
+git config --global difftool.increment.cmd 'inc "$LOCAL" "$REMOTE"'
 git config --global difftool.prompt false
 git difftool -y HEAD~1
 ```
@@ -178,11 +180,43 @@ full.
 
 ## Why another diff tool
 
-`delta` owns the styled pager. `difftastic` owns structural diff. Neither of
-them, and none of the split renderers, reproduces the thing that makes a
-JetBrains diff readable: **alignment** — correspondence between the two sides
-made visible, with folding and a whole-file overview. That is the gap increment
-fills. The survey behind that claim is
+There are good terminal diff tools already, and for some jobs one of them is
+the better choice:
+
+- **[delta](https://github.com/dandavison/delta)** is a styled pager for git's
+  own output, with a side-by-side mode, syntax colour and word-level
+  highlighting. If you want `git diff` and `git log -p` to look better and
+  nothing more, use delta.
+- **[difftastic](https://github.com/Wilfred/difftastic)** diffs syntax trees
+  rather than lines, so it ignores reformatting and shows changes at the
+  level of expressions. If what you need is "what changed structurally," use
+  difftastic. increment will not do this; see below.
+- **[icdiff](https://github.com/jeffkaufman/icdiff)** is a two-column diff
+  that highlights changes inside lines. It is a small Python script for
+  comparing two files.
+
+increment is for reading a change as two aligned files rather than as a
+patch:
+
+- **A whole-file change map.** The browser shows where every change is in the
+  file and where you are in it, as well as the hunk you are looking at.
+- **Folding you can undo.** Unchanged regions collapse, and `f` brings back the
+  whole file. It can do this because it reads both sides in full instead of
+  the few context lines a patch contains.
+- **Moves shown as moves.** A block that moved is marked where it left and
+  where it arrived, instead of appearing as a deletion and an unrelated
+  addition.
+- **Branch review.** `inc review` goes through a branch commit by commit in
+  the same view.
+- **One model for every output.** The terminal view, the browser and
+  `--format json` are all rendered from the same computed rows, so a script
+  sees the same pairing a person does.
+- **A single static binary.** It is pure Rust and reads the repository in
+  process, with no runtime dependency on `git`.
+
+**Structural diff is out of scope on purpose.** tree-sitter grammars are C,
+and increment has no C dependencies; difftastic already does structural diff
+well. The survey behind these choices is in
 [`design/001-visual-diff-state-of-the-art.md`](design/001-visual-diff-state-of-the-art.md).
 
 ## Design
