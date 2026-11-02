@@ -3,9 +3,13 @@
 #
 # CalVer is YYYY.M.MICRO, where MICRO counts the releases already cut this
 # month. The month has no leading zero: 2026.08.1 is not valid SemVer, and
-# cargo requires SemVer. The version is committed in Cargo.toml rather than
-# injected at release time, because that is what `inc --version`, every
-# installer, and crates.io all read.
+# cargo requires SemVer.
+#
+# The tag is the version (release-kit v2). `make release` only tags origin/main
+# and pushes the tag; the release workflow stamps the version into Cargo.toml
+# for the build, then its release PR bumps Cargo.toml in the repo alongside the
+# Homebrew formula. Nothing is bumped or committed here, so there is nothing to
+# race the bot.
 
 SHELL := /usr/bin/env bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -31,7 +35,7 @@ help:
 	@echo 'make hooks        install the prek hooks'
 	@echo 'make version      print the next version'
 	@echo 'make release-dry  show what a release would do, without doing it'
-	@echo 'make release      cut $(TAG) — bump, commit, tag, push'
+	@echo 'make release      tag origin/main as $(TAG) and push the tag'
 
 .PHONY: check
 check: pure-rust
@@ -72,36 +76,23 @@ version:
 	@echo '$(VERSION)'
 
 .PHONY: release-dry
-release-dry:
-	@echo 'would set version to $(VERSION) and tag $(TAG)'
-	@echo 'pushing the tag builds the binaries, publishes a GitHub Release,'
-	@echo 'and commits the Homebrew formula pinned to their checksums'
-	@echo "currently: $$(grep -m1 '^version = ' Cargo.toml)"
+release-dry: release-fetch
+	@echo 'would tag origin/main ($(shell git rev-parse --short origin/main)) as $(TAG) and push the tag'
+	@echo 'the tag push runs the release workflow: it builds the binaries, publishes'
+	@echo 'a GitHub Release, and merges a PR that bumps Cargo.toml and the formula'
 
-.PHONY: release-guard
-release-guard:
-	@test "$$(git rev-parse --abbrev-ref HEAD)" = main \
-		|| { echo 'release: not on main'; exit 1; }
-	@test -z "$$(git status --porcelain)" \
-		|| { echo 'release: working tree is dirty'; exit 1; }
-	@git fetch --quiet origin main
-	@test "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/main)" \
-		|| { echo 'release: local main differs from origin/main'; exit 1; }
-	@! git rev-parse -q --verify 'refs/tags/$(TAG)' >/dev/null \
-		|| { echo 'release: tag $(TAG) already exists'; exit 1; }
+# Tags come from origin so MICRO is computed from what is published, not from
+# whatever this clone happens to have. A prerequisite rather than a recipe line,
+# so the fetch lands before $(TAG) is expanded.
+.PHONY: release-fetch
+release-fetch:
+	@git fetch --quiet origin main --tags
 
 .PHONY: release
-release: release-guard check
-	@echo '--> releasing $(VERSION)'
-	perl -pi -e 's/^version = "[^"]*"$$/version = "$(VERSION)"/ if $$. < 20' Cargo.toml
-	@grep -q '^version = "$(VERSION)"$$' Cargo.toml \
-		|| { echo 'release: failed to set the version'; exit 1; }
-	cargo update --workspace --offline
-	git add Cargo.toml Cargo.lock
-	@git diff --cached --quiet \
-		&& echo 'version already at $(VERSION); tagging existing commit' \
-		|| git commit --quiet -m 'Release $(VERSION)'
-	git tag -a '$(TAG)' -m 'increment $(VERSION)'
-	git push --quiet origin main
+release: release-fetch
+	@! git rev-parse -q --verify 'refs/tags/$(TAG)' >/dev/null \
+		|| { echo 'release: tag $(TAG) already exists'; exit 1; }
+	@echo '--> tagging origin/main as $(TAG)'
+	git tag -a '$(TAG)' -m 'increment $(VERSION)' origin/main
 	git push --quiet origin '$(TAG)'
-	@echo 'pushed $(TAG)'
+	@echo 'pushed $(TAG); the release workflow takes it from here'
