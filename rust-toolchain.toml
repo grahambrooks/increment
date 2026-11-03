@@ -4,5 +4,5 @@
 # same compiler. Keep `channel` in step with `rust-version` in Cargo.toml.
 
 [toolchain]
-channel = "1.99"
+channel = "1.99.1"
 components = ["rustfmt", "clippy"]
