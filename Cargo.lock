@@ -1708,7 +1708,7 @@ dependencies = [
 
 [[package]]
 name = "increment"
-version = "2026.11.1"
+version = "2026.11.3"
 dependencies = [
  "anstream",
  "anstyle",
