@@ -71,9 +71,10 @@ that line is what keeps increment a diff viewer rather than a second git browser
 ## Workflow
 
 - Trunk-based: commit and push directly to `main`. PRs are not required.
-- `prek` pre-commit gate — fast checks on changed files at commit, whole repo at push. Never put
+- `prek` hooks (`make hooks`) — fast checks on changed files at commit, `make check` at push. Never put
   an unreliable check in the hook.
 - CI: one `ubuntu-latest` job — build, test, `clippy -D warnings`, `fmt --check`.
-- Releases: CalVer, GitHub Actions builds the binaries, Homebrew formula lives in this repo.
+- Releases: CalVer `vYYYY.M.D`; `make release` (release.mk) pushes only the tag, GitHub Actions
+  builds the binaries, Homebrew formula lives in this repo.
   crates.io publishing stays behind a manual workflow trigger.
 - Verify against the real artifact, not the local build.

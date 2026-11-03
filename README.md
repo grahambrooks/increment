@@ -243,8 +243,8 @@ Following `diff(1)`, so anything already wrapping a diff tool behaves:
 ## Development
 
 ```sh
-make check    # fmt, clippy, tests — the pre-commit gate
-make hooks    # install the prek hooks (fast checks at commit, tests at push)
+make check    # fmt, clippy, tests (the CI check job) — the pre-commit gate
+make hooks    # install the prek hooks (fast checks at commit, make check at push)
 make test
 ```
 
