@@ -14,7 +14,7 @@ name = "increment"
 # that tag already exists). No leading zeros because 2026.08.1 is not valid
 # SemVer and cargo requires SemVer. Never bump by hand: `make release` pushes
 # the tag and the release workflow's PR bumps this line.
-version = "2026.11.1"
+version = "2026.11.3"
 edition = "2024"
 license = "MIT"
 description = "A diff visualizer for the terminal: the aligned side-by-side view, as structured output."
