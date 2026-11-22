@@ -19,13 +19,12 @@ edition = "2024"
 license = "MIT"
 description = "A diff visualizer for the terminal: the aligned side-by-side view, as structured output."
 repository = "https://github.com/grahambrooks/increment"
-homepage = "https://github.com/grahambrooks/increment"
 keywords = ["diff", "git", "terminal", "tui", "side-by-side"]
 categories = ["command-line-utilities", "development-tools"]
 # Tracks latest stable, and is pinned a second time in rust-toolchain.toml so a
 # laptop, CI and a release runner all compile with the same compiler. Declaring
 # a floor nothing is tested at is worse than declaring an honest one.
-rust-version = "1.99.1"
+rust-version = "1.100.0"
 
 [lib]
 name = "increment"
